@@ -601,6 +601,123 @@ function JournalDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
 
+  // ============================================================================
+  // SUPABASE CLOUD DATABASE SYNC (CROSS-DEVICE SCREENSHOTS, NOTES & TRADES)
+  // ============================================================================
+  const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [cloudUrl, setCloudUrl] = useState(() => (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim());
+  const [cloudKey, setCloudKey] = useState(() => (import.meta.env?.VITE_SUPABASE_ANON_KEY || localStorage.getItem('crowevar_supabase_key') || '').trim());
+  const [cloudStatus, setCloudStatus] = useState('Idle'); // 'Synced' | 'Syncing...' | 'Error' | 'Not Configured'
+  const [lastSyncedAt, setLastSyncedAt] = useState('');
+  const [cloudInitialLoaded, setCloudInitialLoaded] = useState(false);
+
+  const pullFromCloud = async (urlOverride = cloudUrl, keyOverride = cloudKey, silent = false) => {
+    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '');
+    const cleanKey = String(keyOverride || '').trim();
+    if (!cleanUrl || !cleanKey) {
+      setCloudStatus('Not Configured');
+      setCloudInitialLoaded(true);
+      return;
+    }
+    try {
+      setCloudStatus('Syncing...');
+      const res = await fetch(`${cleanUrl}/rest/v1/journal_store?id=eq.master&select=*`, {
+        headers: {
+          apikey: cleanKey,
+          Authorization: `Bearer ${cleanKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        const remote = rows[0];
+        if (Array.isArray(remote.trades) && remote.trades.length > 0) {
+          const cleaned = remote.trades.filter((t) => !isPhantomMockTrade(t)).map((t, i) => sanitizeTrade(t, i));
+          setTrades(cleaned);
+          idbSaveTrades(cleaned);
+        }
+        if (Array.isArray(remote.profiles) && remote.profiles.length > 0) {
+          setProfiles(remote.profiles.map(normalizeProfile));
+        }
+        if (Array.isArray(remote.trash)) {
+          setRecycleBin(remote.trash);
+        }
+        setCloudStatus('Synced');
+        setLastSyncedAt(new Date().toLocaleTimeString());
+        if (!silent) showToast('☁️ Pulled latest trades, notes & screenshots from Cloud!');
+      } else {
+        // First time connecting: push local state up to initialize the cloud row
+        await pushToCloud(cleanUrl, cleanKey, trades, profiles, recycleBin, true);
+      }
+      setCloudInitialLoaded(true);
+    } catch (err) {
+      console.error('Cloud pull error:', err);
+      setCloudStatus('Error');
+      setCloudInitialLoaded(true);
+      if (!silent) showToast('⚠️ Cloud connection failed. Check your Supabase URL & Anon Key.');
+    }
+  };
+
+  const pushToCloud = async (
+    urlOverride = cloudUrl,
+    keyOverride = cloudKey,
+    tradesPayload = trades,
+    profilesPayload = profiles,
+    trashPayload = recycleBin,
+    silent = true
+  ) => {
+    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '');
+    const cleanKey = String(keyOverride || '').trim();
+    if (!cleanUrl || !cleanKey) return;
+    try {
+      setCloudStatus('Syncing...');
+      const res = await fetch(`${cleanUrl}/rest/v1/journal_store`, {
+        method: 'POST',
+        headers: {
+          apikey: cleanKey,
+          Authorization: `Bearer ${cleanKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          id: 'master',
+          trades: tradesPayload.filter((t) => !isPhantomMockTrade(t)),
+          profiles: profilesPayload,
+          trash: trashPayload,
+          updated_at: new Date().toISOString()
+        })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCloudStatus('Synced');
+      setLastSyncedAt(new Date().toLocaleTimeString());
+      if (!silent) showToast('☁️ All trades, notes & screenshots saved to Cloud!');
+    } catch (err) {
+      console.error('Cloud push error:', err);
+      setCloudStatus('Error');
+      if (!silent) showToast('⚠️ Failed to push to Cloud database.');
+    }
+  };
+
+  // Auto-pull from Cloud on startup
+  useEffect(() => {
+    if (cloudUrl && cloudKey) {
+      pullFromCloud(cloudUrl, cloudKey, true);
+    } else {
+      setCloudStatus('Not Configured');
+      setCloudInitialLoaded(true);
+    }
+  }, []);
+
+  // Auto-push to Cloud whenever trades, notes, screenshots, accounts, or trash change
+  useEffect(() => {
+    if (!cloudInitialLoaded || !cloudUrl || !cloudKey) return;
+    const timer = setTimeout(() => {
+      pushToCloud(cloudUrl, cloudKey, trades, profiles, recycleBin, true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [trades, profiles, recycleBin, cloudInitialLoaded]);
+
   const showToast = (msg, undoAction = null) => {
     setToast({ msg, undoAction });
     setTimeout(() => setToast(null), 5000);
@@ -1229,6 +1346,21 @@ function JournalDashboard() {
                   <span>Add /</span>
                   <Edit3 className="w-3 h-3" />
                   <span>Edit</span>
+                </button>
+
+                <button
+                  onClick={() => setCloudModalOpen(true)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                    cloudStatus === 'Synced'
+                      ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                      : cloudStatus === 'Syncing...'
+                      ? 'bg-cyan-950/50 border-cyan-500/40 text-cyan-300'
+                      : 'bg-[#0d1326] border-slate-700/80 text-slate-300 hover:border-cyan-500/40'
+                  }`}
+                  title="Configure Free Cloud Database Sync"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cloudStatus === 'Syncing...' ? 'animate-spin text-cyan-400' : cloudStatus === 'Synced' ? 'text-emerald-400' : 'text-cyan-400'}`} />
+                  <span>{cloudStatus === 'Synced' ? 'Cloud Synced' : cloudStatus === 'Syncing...' ? 'Syncing...' : 'Cloud Sync'}</span>
                 </button>
 
                 <button
@@ -2375,6 +2507,95 @@ function JournalDashboard() {
                 className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLOUD DATABASE SYNC MODAL */}
+      {cloudModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#090d1a] border border-cyan-500/50 rounded-3xl max-w-lg w-full p-6 space-y-4 text-xs shadow-[0_0_50px_rgba(6,182,212,0.25)]">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-white">☁️ Cloud Database Sync (Supabase)</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Sync all trades, Pre/Post-Trade notes, and screenshots across all your devices.
+                </p>
+              </div>
+              <button onClick={() => setCloudModalOpen(false)} className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-[#0b1020] border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase">SYNC STATUS</span>
+                <strong className={cloudStatus === 'Synced' ? 'text-emerald-400 text-sm' : cloudStatus === 'Error' ? 'text-rose-400 text-sm' : 'text-amber-300 text-sm'}>
+                  {cloudStatus} {lastSyncedAt ? `• Last synced at ${lastSyncedAt}` : ''}
+                </strong>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => pullFromCloud(cloudUrl, cloudKey, false)}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold"
+                >
+                  ⬇ Pull from Cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pushToCloud(cloudUrl, cloudKey, trades, profiles, recycleBin, false)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold"
+                >
+                  ⬆ Push to Cloud
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Supabase Project URL</label>
+                <input
+                  type="text"
+                  placeholder="https://your-project-id.supabase.co"
+                  value={cloudUrl}
+                  onChange={(e) => setCloudUrl(e.target.value)}
+                  className="w-full bg-[#0d1326] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Supabase Anon Public Key</label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={cloudKey}
+                  onChange={(e) => setCloudKey(e.target.value)}
+                  className="w-full bg-[#0d1326] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCloudModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('crowevar_supabase_url', cloudUrl.trim());
+                  localStorage.setItem('crowevar_supabase_key', cloudKey.trim());
+                  pullFromCloud(cloudUrl.trim(), cloudKey.trim(), false);
+                  setCloudModalOpen(false);
+                }}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-extrabold"
+              >
+                Save &amp; Connect Cloud
               </button>
             </div>
           </div>
