@@ -2390,7 +2390,7 @@ function JournalDashboard() {
             </div>
           )}
 
-          <div className={`${mobileLedgerMode === 'CARDS' ? 'hidden md:block' : 'block'} overflow-x-auto border border-slate-800 rounded-xl">
+          <div className={(mobileLedgerMode === "CARDS" ? "hidden md:block " : "block ") + "overflow-x-auto"}>
             <table className="w-full text-left border-collapse min-w-[1150px]">
               <thead>
                 <tr className="border-b border-slate-800 bg-[#0b1020] text-[11px] font-bold uppercase text-slate-400">
@@ -2417,10 +2417,10 @@ function JournalDashboard() {
                       <td className="py-3.5 px-3 font-mono text-[11px] text-slate-300">{t.execDate?.replace('T', ' ')}</td>
                       <td className="py-3.5 px-3">
                         <span className="font-bold text-white underline">{t.symbol}</span>
-                        <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${t.side === 'Buy' ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'}`}>{t.side}</span>
+                            <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] " + (t.side === "Buy" ? "bg-emerald-950 text-emerald-300" : "bg-rose-950 text-rose-300")}>{t.side}</span>
                       </td>
                       <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${t.status === 'W' ? 'bg-emerald-500/15 text-emerald-400' : t.status === 'L' ? 'bg-rose-500/15 text-rose-400' : 'bg-cyan-500/15 text-cyan-400'}`}>
+                            <span className={"px-2.5 py-1 rounded-full text-[11px] font-bold " + (t.status === "W" ? "bg-emerald-500/15 text-emerald-400" : t.status === "L" ? "bg-rose-500/15 text-rose-400" : "bg-cyan-500/15 text-cyan-400")}>
                           {t.status === 'W' ? '✓ Won' : t.status === 'L' ? '✕ Lost' : '◉ Open'}
                         </span>
                       </td>
