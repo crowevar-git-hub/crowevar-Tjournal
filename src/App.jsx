@@ -600,6 +600,7 @@ function JournalDashboard() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
+  const [mobileLedgerMode, setMobileLedgerMode] = useState('CARDS'); // 'CARDS' | 'TABLE'
   const [ledgerExportScope, setLedgerExportScope] = useState('CURRENT'); // 'CURRENT' | 'ALL'
 
   // ============================================================================
@@ -1500,7 +1501,7 @@ function JournalDashboard() {
               <div className="flex items-center select-none shrink-0" title="Crowevar">
                 <svg
                   viewBox="0 0 355 72"
-                  className="h-9 sm:h-11 w-auto overflow-visible"
+                  className="h-7 sm:h-11 w-auto overflow-visible"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
                 >
@@ -1616,7 +1617,7 @@ function JournalDashboard() {
                         handleSelectContextAndAccount(s, a);
                       }
                     }}
-                    className="bg-transparent text-slate-100 font-mono font-bold focus:outline-none cursor-pointer pr-2"
+                    className="bg-transparent text-slate-100 font-mono font-bold focus:outline-none cursor-pointer pr-2 w-full max-w-[230px] sm:max-w-none truncate"
                   >
                     <option value="UNIFIED::ALL" className="bg-[#0d1326]">
                       Unified View — All Accounts Combined
@@ -2214,7 +2215,182 @@ function JournalDashboard() {
             </div>
           </div>
 
-          <div className="overflow-x-auto border border-slate-800 rounded-xl">
+          {/* MOBILE VIEW SWITCHER & TOUCH-FRIENDLY TRADE CARDS (VISIBLE ON MOBILE DEVICES) */}
+          <div className="flex md:hidden items-center justify-between bg-[#090e1f] border border-slate-800 rounded-xl px-3 py-2 mb-3 text-xs">
+            <span className="text-slate-400 font-semibold">Mobile Display Mode:</span>
+            <div className="inline-flex rounded-lg bg-[#050811] p-0.5 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setMobileLedgerMode('CARDS')}
+                className={`px-3 py-1 rounded-md text-[11px] font-bold transition ${
+                  mobileLedgerMode === 'CARDS'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400'
+                }`}
+              >
+                📱 Cards ({filteredTrades.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileLedgerMode('TABLE')}
+                className={`px-3 py-1 rounded-md text-[11px] font-bold transition ${
+                  mobileLedgerMode === 'TABLE'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400'
+                }`}
+              >
+                📋 Full Table
+              </button>
+            </div>
+          </div>
+
+          {mobileLedgerMode === 'CARDS' && (
+            <div className="md:hidden space-y-3 mb-4">
+              {filteredTrades.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 bg-[#0b1020] rounded-2xl border border-slate-800 text-xs">
+                  No trades match the current filter.
+                </div>
+              ) : (
+                filteredTrades.map((t) => {
+                  const prof = Number(t.profit) || 0;
+                  const loss = Number(t.loss) || 0;
+                  const net = prof - loss;
+                  const shots = Array.isArray(t.screenshots) ? t.screenshots : [];
+                  const preText =
+                    typeof t.preTradeAnalysis === 'string'
+                      ? t.preTradeAnalysis
+                      : t.preTradeAnalysis?.tradePlan || t.preAnalysis || '';
+                  const postText =
+                    typeof t.postTradeReview === 'string'
+                      ? t.postTradeReview
+                      : t.postTradeReview?.outcomeAnalysis || t.postAnalysis || '';
+
+                  return (
+                    <div
+                      key={`mob-${t.id}`}
+                      onClick={() => {
+                        setReviewTrade(t);
+                        setIsReviewEditMode(false);
+                      }}
+                      className="bg-[#0b1122] border border-slate-800/90 active:border-cyan-500/60 rounded-2xl p-3.5 space-y-2.5 text-xs shadow-md transition cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
+                        <div>
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="font-mono font-bold text-amber-300">#{t.ticketId}</span>
+                            <span className="font-extrabold text-white text-sm">{t.symbol}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                t.side === 'Buy'
+                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                              }`}
+                            >
+                              {t.side} • {t.lots ?? 1}L
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            {t.stage} • Acct #{t.accountNumber} • {t.execDate}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div
+                            className={`text-sm font-extrabold font-mono ${
+                              t.status === 'O'
+                                ? 'text-cyan-300'
+                                : net >= 0
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                            }`}
+                          >
+                            {t.status === 'O'
+                              ? 'OPEN'
+                              : net >= 0
+                              ? `+$${net.toFixed(2)}`
+                              : `-$${Math.abs(net).toFixed(2)}`}
+                          </div>
+                          <span
+                            className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold ${
+                              t.status === 'W'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : t.status === 'L'
+                                ? 'bg-rose-500/20 text-rose-300'
+                                : 'bg-cyan-500/20 text-cyan-300'
+                            }`}
+                          >
+                            {t.status === 'W' ? '✓ Won' : t.status === 'L' ? '✕ Lost' : '◉ Open'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {(preText || postText) && (
+                        <div className="grid grid-cols-1 gap-1.5 text-[11px] bg-[#070b16] rounded-xl p-2.5 border border-slate-800/80">
+                          {preText && (
+                            <div className="truncate text-slate-300">
+                              <strong className="text-cyan-400">1. PRE: </strong>
+                              {preText}
+                            </div>
+                          )}
+                          {postText && (
+                            <div className="truncate text-slate-300">
+                              <strong className="text-indigo-400">2. POST: </strong>
+                              {postText}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 text-[10px]">
+                            {t.session || 'NY'}
+                          </span>
+                          {shots.length > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
+                              📸 {shots.length} Photo{shots.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          className="flex items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReviewTrade(t);
+                              setIsReviewEditMode(false);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-[11px]"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(t)}
+                            className="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-semibold text-[11px]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRequest(t)}
+                            className="p-1.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          <div className={`${mobileLedgerMode === 'CARDS' ? 'hidden md:block' : 'block'} overflow-x-auto border border-slate-800 rounded-xl">
             <table className="w-full text-left border-collapse min-w-[1150px]">
               <thead>
                 <tr className="border-b border-slate-800 bg-[#0b1020] text-[11px] font-bold uppercase text-slate-400">

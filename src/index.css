@@ -2,9 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+html,
+body,
+#root {
   background-color: #050811;
   color: #f8fafc;
   margin: 0;
+  padding: 0;
+  max-width: 100vw;
+  overflow-x: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth momentum touch scrolling for mobile tables, calendars & modals */
+.overflow-x-auto,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sleek dark scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #070b16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
+
+/* Mobile-specific responsive adjustments (< 640px) */
+@media (max-width: 640px) {
+  /* Prevent iOS Safari auto-zoom when tapping form inputs inside modals */
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="datetime-local"],
+  input[type="date"],
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Ensure fixed modals never get cut off by mobile browser toolbars */
+  .fixed.inset-0 > div {
+    max-height: 90dvh !important;
+    overflow-y: auto !important;
+  }
+
+  /* Keep 7-column Trading Calendar readable via horizontal touch scroll on narrow phones */
+  .grid-cols-7 {
+    min-width: 560px;
+  }
 }
