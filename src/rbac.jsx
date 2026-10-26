@@ -479,112 +479,172 @@ export function RBACSecurityProvider({ children }) {
     };
   }, [effectivePermissions.viewLiveAccounts, isAdmin]);
 
-  // DOM-Level Security Enforcer: Hides Live Personal Card, Dropdown Options, and Unauthorized Action Buttons
+  // DOM-Level Security Enforcer: Hides Live Personal Card, Account Dropdown Options & + Add / Edit Button in Visitor Mode
   useEffect(() => {
     const enforceDomPolicies = () => {
-      // 1. Hide or show "Live Personal" card in Challenge Lifecycle Matrix & adjust grid columns
-      const allHeadings = document.querySelectorAll('h3, h4, span, div');
-      allHeadings.forEach((el) => {
-        if (el.childNodes.length === 1 && el.textContent?.trim() === 'Live Personal') {
-          const card = el.closest('.rounded-2xl.p-4.border.transition');
-          if (card) {
+      // 1. Hide or restore "Live Personal" card in the Challenge Lifecycle Matrix & auto-fit grid columns
+      const allElements = document.querySelectorAll('h3, h4, span, div, p');
+      let liveCardFound = null;
+
+      allElements.forEach((el) => {
+        const rawTxt = (el.textContent || '').trim();
+        if (rawTxt === 'Live Personal' || rawTxt === 'LIVE PERSONAL') {
+          let curr = el;
+          while (curr && curr.parentElement) {
+            const parentCls = String(curr.parentElement.className || '');
+            if (
+              parentCls.includes('grid') &&
+              (parentCls.includes('lg:grid-cols-5') ||
+                parentCls.includes('lg:grid-cols-4') ||
+                parentCls.includes('sm:grid-cols-2'))
+            ) {
+              liveCardFound = curr;
+              break;
+            }
+            curr = curr.parentElement;
+          }
+        }
+      });
+
+      if (liveCardFound && liveCardFound.parentElement) {
+        const matrixGrid = liveCardFound.parentElement;
+        if (!effectivePermissions.viewLiveAccounts) {
+          liveCardFound.style.setProperty('display', 'none', 'important');
+          matrixGrid.classList.remove('lg:grid-cols-5');
+          matrixGrid.classList.add('lg:grid-cols-4');
+        } else {
+          liveCardFound.style.removeProperty('display');
+          matrixGrid.classList.remove('lg:grid-cols-4');
+          matrixGrid.classList.add('lg:grid-cols-5');
+        }
+      }
+
+      // 2. Hide/disable "Live Personal" options & optgroups inside all <select> dropdowns for Visitors
+      const selects = document.querySelectorAll('select');
+      selects.forEach((sel) => {
+        if (sel.closest('[data-rbac-ui="true"]')) return;
+        const children = sel.querySelectorAll('optgroup, option');
+        children.forEach((node) => {
+          const labelTxt = (
+            node.getAttribute('label') ||
+            node.textContent ||
+            node.value ||
+            ''
+          ).toLowerCase();
+          if (labelTxt.includes('live personal') || labelTxt.includes('6004822')) {
             if (!effectivePermissions.viewLiveAccounts) {
-              card.style.setProperty('display', 'none', 'important');
-              if (card.parentElement && card.parentElement.classList.contains('lg:grid-cols-5')) {
-                card.parentElement.style.setProperty('grid-template-columns', 'repeat(auto-fit, minmax(210px, 1fr))');
-              }
+              node.style.setProperty('display', 'none', 'important');
+              node.disabled = true;
+              node.hidden = true;
             } else {
-              card.style.removeProperty('display');
-              if (card.parentElement) {
-                card.parentElement.style.removeProperty('grid-template-columns');
-              }
+              node.style.removeProperty('display');
+              node.disabled = false;
+              node.hidden = false;
             }
           }
-        }
+        });
       });
 
-      // 2. Hide "Live Personal" options inside any <select> dropdown when unauthorized
-      const allOptions = document.querySelectorAll('option, optgroup');
-      allOptions.forEach((opt) => {
-        const txt = (opt.textContent || opt.getAttribute('label') || '').toLowerCase();
-        if (txt.includes('live personal') || txt.includes('6004822')) {
-          if (!effectivePermissions.viewLiveAccounts) {
-            opt.style.setProperty('display', 'none', 'important');
-            opt.disabled = true;
-          } else {
-            opt.style.removeProperty('display');
-            opt.disabled = false;
-          }
-        }
-      });
-
-      // 3. Enforce Action Button Permissions across Header, Ledger Table, Mobile Cards & Modals
+      // 3. Hide "+ Add / Edit" button and all write/admin action buttons in Visitor Mode
       const buttons = document.querySelectorAll('button, label.cursor-pointer');
       buttons.forEach((btn) => {
-        if (btn.closest('[data-rbac-ui="true"]')) return; // Never hide RBAC's own controls
-        const text = (btn.textContent || '').trim();
-        const title = (btn.getAttribute('title') || '').trim();
+        if (btn.closest('[data-rbac-ui="true"]')) return;
+        const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+        const lowerText = text.toLowerCase();
+        const title = (btn.getAttribute('title') || '').toLowerCase();
 
-        // Create Trade / Import HTML buttons
+        // "+ Add / Edit" Multi-Account Stage Manager button
+        const isAccountManageBtn =
+          lowerText.includes('add / edit') ||
+          lowerText.includes('add/edit') ||
+          lowerText.includes('+ add') ||
+          text === '+ ✎' ||
+          lowerText.includes('add account') ||
+          title.includes('manage stage accounts') ||
+          title.includes('add or edit account');
+
+        // Create / Import buttons
         const isCreateBtn =
-          text.includes('Log Trade') ||
-          text.includes('Import HTML') ||
-          text.includes('Upload Entry Screenshot') ||
-          text.includes('Upload Result Screenshot') ||
-          text.includes('Save & Analyze');
+          lowerText.includes('log trade') ||
+          lowerText.includes('import html') ||
+          lowerText.includes('upload entry screenshot') ||
+          lowerText.includes('upload result screenshot') ||
+          lowerText.includes('save & analyze');
 
         // Edit buttons
         const isEditBtn =
-          text === 'Edit' ||
-          text.includes('Edit Trade') ||
-          title.includes('Edit Trade') ||
-          title.includes('Edit Execution');
+          lowerText === 'edit' ||
+          lowerText.includes('edit trade') ||
+          title.includes('edit trade') ||
+          title.includes('edit execution');
 
-        // Delete / Trash buttons
+        // Delete / Recycle Bin buttons
         const isDeleteBtn =
-          text.includes('Trash') ||
-          text.includes('Recycle Bin') ||
-          text === 'Delete' ||
-          text.includes('Delete Trade') ||
-          title.includes('Delete') ||
-          title.includes('Recycle Bin');
+          lowerText.includes('trash') ||
+          lowerText.includes('recycle bin') ||
+          lowerText === 'delete' ||
+          lowerText.includes('delete trade') ||
+          title.includes('delete') ||
+          title.includes('recycle bin');
 
-        // Account Management buttons (+ ✎)
-        const isAccountManageBtn =
-          title.includes('Manage Stage Accounts') ||
-          title.includes('Add or Edit Account') ||
-          text === '+ ✎' ||
-          text.includes('Add Account');
-
-        // Cloud Sync Config button
+        // Cloud Sync button
         const isCloudConfigBtn =
-          title.includes('Configure Free Cloud Database Sync') ||
-          text.includes('Cloud Sync') ||
-          text.includes('Cloud Synced');
+          title.includes('configure free cloud database sync') ||
+          lowerText.includes('cloud sync');
 
         // Export CSV / HTML buttons
         const isExportBtn =
-          text.includes('Export CSV') ||
-          text.includes('Export HTML');
+          lowerText.includes('export csv') ||
+          lowerText.includes('export html');
 
-        if (isCreateBtn) {
-          btn.style.display = effectivePermissions.createTrades ? '' : 'none';
-          btn.disabled = !effectivePermissions.createTrades;
+        if (isAccountManageBtn) {
+          if (!effectivePermissions.editAccountInfo) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
+        } else if (isCreateBtn) {
+          if (!effectivePermissions.createTrades) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
         } else if (isEditBtn) {
-          btn.style.display = effectivePermissions.editTrades ? '' : 'none';
-          btn.disabled = !effectivePermissions.editTrades;
+          if (!effectivePermissions.editTrades) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
         } else if (isDeleteBtn) {
-          btn.style.display = effectivePermissions.deleteTrades ? '' : 'none';
-          btn.disabled = !effectivePermissions.deleteTrades;
-        } else if (isAccountManageBtn) {
-          btn.style.display = effectivePermissions.editAccountInfo ? '' : 'none';
-          btn.disabled = !effectivePermissions.editAccountInfo;
+          if (!effectivePermissions.deleteTrades) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
         } else if (isCloudConfigBtn) {
-          btn.style.display = effectivePermissions.manageUsers ? '' : 'none';
-          btn.disabled = !effectivePermissions.manageUsers;
+          if (!effectivePermissions.manageUsers) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
         } else if (isExportBtn) {
-          btn.style.display = effectivePermissions.accessReports ? '' : 'none';
-          btn.disabled = !effectivePermissions.accessReports;
+          if (!effectivePermissions.accessReports) {
+            btn.style.setProperty('display', 'none', 'important');
+            btn.disabled = true;
+          } else {
+            btn.style.removeProperty('display');
+            btn.disabled = false;
+          }
         }
       });
     };
