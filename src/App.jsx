@@ -529,6 +529,7 @@ function JournalDashboard() {
 
   // Persist every note & screenshot edit to both IndexedDB (unlimited size) and localStorage
   useEffect(() => {
+    if (window.__CROWEVAR_RBAC__ && !window.__CROWEVAR_RBAC__.canWriteData) return;
     const cleanList = trades.filter((t) => !isPhantomMockTrade(t));
     idbSaveTrades(cleanList);
     try {
@@ -600,6 +601,39 @@ function JournalDashboard() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
+  const fullTradesVaultRef = React.useRef(null);
+  const [rbacTick, setRbacTick] = useState(0);
+
+  // Listen to RBAC role/login changes and enforce stage permissions
+  useEffect(() => {
+    const handleRbacChange = () => setRbacTick((n) => n + 1);
+    window.addEventListener('crowevar-rbac-change', handleRbacChange);
+    return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange);
+  }, []);
+
+  useEffect(() => {
+    const rbac = window.__CROWEVAR_RBAC__;
+    if (!rbac) return;
+
+    if (Array.isArray(trades) && trades.some((t) => t.stage === 'Live Personal')) {
+      fullTradesVaultRef.current = trades;
+    }
+
+    if (!rbac.can('viewLiveAccounts')) {
+      if (activeContext === 'Live Personal') {
+        setActiveContext('Stage 1');
+      }
+      if (Array.isArray(trades) && trades.some((t) => t.stage === 'Live Personal')) {
+        setTrades((prev) => prev.filter((t) => t.stage !== 'Live Personal'));
+      }
+    } else if (
+      fullTradesVaultRef.current &&
+      Array.isArray(trades) &&
+      !trades.some((t) => t.stage === 'Live Personal')
+    ) {
+      setTrades(fullTradesVaultRef.current);
+    }
+  }, [rbacTick, activeContext, trades]);
 
   // Auto-fix trades logged with the old hardcoded 2026-10-24 date -> 2026-10-26
   useEffect(() => {
