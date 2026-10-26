@@ -239,7 +239,7 @@ const sanitizeTrade = (t, idx = 0) => {
       id: `legacy-${ticket}`, type: 'ENTRY',
       filename: `${ticket}_${acct}_${sym}_ENTRY.png`,
       folderPath: `/Firms/EquityEdge/${stage.replace(/\s+/g, '')}/Account_${acct}/Entry`,
-      url: String(t.screenshotUrl), uploadDate: '2026-10-24', version: 1
+      url: String(t.screenshotUrl), uploadDate: (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })(), version: 1
     });
   }
   return {
@@ -275,7 +275,7 @@ const sanitizeTrade = (t, idx = 0) => {
       filename: String(s.filename || `${ticket}_${sym}_${s.type || 'ENTRY'}.png`),
       folderPath: String(s.folderPath || `/Firms/EquityEdge/Account_${acct}`),
       url: String(s.url || ''),
-      uploadDate: String(s.uploadDate || '2026-10-24'),
+      uploadDate: String(s.uploadDate || (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })()),
       version: Number(s.version) || 1
     }))
   };
@@ -576,7 +576,7 @@ function JournalDashboard() {
   const [accountDeleteConfirmText, setAccountDeleteConfirmText] = useState('');
 
   const [cashflowModalOpen, setCashflowModalOpen] = useState(false);
-  const [cashflowForm, setCashflowForm] = useState({ accountNumber: '6004822', type: 'DEPOSIT', amount: '', date: '2026-10-24', note: '' });
+  const [cashflowForm, setCashflowForm] = useState({ accountNumber: '6004822', type: 'DEPOSIT', amount: '', date: (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })(), note: '' });
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importTargetStage, setImportTargetStage] = useState('AUTO');
@@ -600,6 +600,33 @@ function JournalDashboard() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
+
+  // Auto-fix trades logged with the old hardcoded 2026-10-24 date -> 2026-10-26
+  useEffect(() => {
+    const hasOct24 = trades.some(
+      (t) =>
+        String(t.execDate || '').includes('2026-10-24') ||
+        String(t.closeDate || '').includes('2026-10-24') ||
+        String(t.execDate || '').includes('2026.10.24') ||
+        String(t.closeDate || '').includes('2026.10.24')
+    );
+    if (hasOct24) {
+      setTrades((prev) =>
+        prev.map((t) => {
+          const nextExec = String(t.execDate || '')
+            .replace('2026-10-24', '2026-10-26')
+            .replace('2026.10.24', '2026-10-26');
+          const nextClose = String(t.closeDate || '')
+            .replace('2026-10-24', '2026-10-26')
+            .replace('2026.10.24', '2026-10-26');
+          if (nextExec !== t.execDate || nextClose !== t.closeDate) {
+            return { ...t, execDate: nextExec, closeDate: nextClose };
+          }
+          return t;
+        })
+      );
+    }
+  }, [trades]);
   const [mobileLedgerMode, setMobileLedgerMode] = useState('CARDS'); // 'CARDS' | 'TABLE'
   const [ledgerExportScope, setLedgerExportScope] = useState('CURRENT'); // 'CURRENT' | 'ALL'
 
@@ -1794,7 +1821,7 @@ function JournalDashboard() {
                   type="button"
                   onClick={() => {
                     const liveAccts = getStageAccountsList('Live Personal');
-                    setCashflowForm({ accountNumber: activeAccountNumber !== 'ALL' ? activeAccountNumber : liveAccts[0] || '6004822', type: 'DEPOSIT', amount: '', date: '2026-10-24', note: '' });
+                    setCashflowForm({ accountNumber: activeAccountNumber !== 'ALL' ? activeAccountNumber : liveAccts[0] || '6004822', type: 'DEPOSIT', amount: '', date: (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })(), note: '' });
                     setCashflowModalOpen(true);
                   }}
                   className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold"
