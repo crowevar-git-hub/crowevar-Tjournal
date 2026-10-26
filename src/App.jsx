@@ -600,6 +600,328 @@ function JournalDashboard() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
+  const [ledgerExportScope, setLedgerExportScope] = useState('CURRENT'); // 'CURRENT' | 'ALL'
+
+  // ============================================================================
+  // EXECUTION JOURNAL & TRADE LEDGER EXPORTERS (CSV & STANDALONE HTML WITH SCREENSHOTS)
+  // ============================================================================
+  const getExportTargetTrades = () => {
+    const sourceList = ledgerExportScope === 'ALL' ? trades : filteredTrades;
+    return (sourceList || []).filter((t) => !t.deleted);
+  };
+
+  const handleExportLedgerCSV = () => {
+    const list = getExportTargetTrades();
+    if (list.length === 0) {
+      showToast('⚠️ No trades in the current view to export.');
+      return;
+    }
+
+    const csvEscape = (val) => {
+      const str = String(val ?? '').replace(/\r?\n/g, ' | ');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'Ticket ID',
+      'Trade ID',
+      'Stage',
+      'Account Number',
+      'Firm',
+      'Execution Date',
+      'Close Date',
+      'Symbol',
+      'Category',
+      'Session',
+      'Direction',
+      'Lots / Size',
+      'Risk %',
+      'Status',
+      'Gross Profit ($)',
+      'Gross Loss ($)',
+      'Net P&L ($)',
+      'R-Multiple',
+      'Pre-Trade Analysis (Notes)',
+      'Post-Trade Review (Notes)',
+      'Psychology Tags',
+      'Rules Followed',
+      'Entry Screenshot Filename',
+      'Entry Screenshot Path',
+      'Result Screenshot Filename',
+      'Result Screenshot Path',
+      'Entry Screenshot Data/URL',
+      'Result Screenshot Data/URL'
+    ];
+
+    const rows = list.map((t) => {
+      const prof = Number(t.profit) || 0;
+      const loss = Number(t.loss) || 0;
+      const net = prof - loss;
+      const preNotes =
+        typeof t.preTradeAnalysis === 'string'
+          ? t.preTradeAnalysis
+          : t.preTradeAnalysis?.tradePlan || t.preAnalysis || '';
+      const postNotes =
+        typeof t.postTradeReview === 'string'
+          ? t.postTradeReview
+          : t.postTradeReview?.outcomeAnalysis || t.postAnalysis || '';
+      const psych = Array.isArray(t.psychology) ? t.psychology.join('; ') : '';
+      const rules =
+        t.rulesFollowed && typeof t.rulesFollowed === 'object'
+          ? Object.entries(t.rulesFollowed)
+              .filter(([, v]) => Boolean(v))
+              .map(([k]) => k)
+              .join('; ')
+          : '';
+      const shots = Array.isArray(t.screenshots) ? t.screenshots : [];
+      const entryShot = shots.find((s) => s.type === 'ENTRY') || shots[0] || null;
+      const resultShot = shots.find((s) => s.type === 'RESULT') || shots[1] || null;
+      const stageKey = STAGE_KEY_MAP[t.stage] || 'stage1';
+      const meta = getAccountMeta(t.accountNumber, stageKey);
+      const statusLabel = t.status === 'W' ? 'Won' : t.status === 'L' ? 'Lost' : 'Open';
+
+      return [
+        t.ticketId || '',
+        t.id || '',
+        t.stage || '',
+        t.accountNumber || '',
+        t.firm || meta?.firm || '',
+        t.execDate || '',
+        t.status === 'O' ? 'Pending' : t.closeDate || '',
+        t.symbol || '',
+        t.category || '',
+        t.session || '',
+        t.side || '',
+        t.lots ?? 1,
+        t.riskPct ?? '',
+        statusLabel,
+        prof.toFixed(2),
+        loss.toFixed(2),
+        net.toFixed(2),
+        t.status === 'O' ? 'Pending' : t.rMultiple ?? '',
+        preNotes,
+        postNotes,
+        psych,
+        rules,
+        entryShot?.filename || '',
+        entryShot?.folderPath || '',
+        resultShot?.filename || '',
+        resultShot?.folderPath || '',
+        entryShot?.url || '',
+        resultShot?.url || ''
+      ]
+        .map(csvEscape)
+        .join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.map(csvEscape).join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const scopeTag = ledgerExportScope === 'ALL' ? 'All_Accounts' : activeContext.replace(/\s+/g, '_');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TradeAtlas_Crowevar_${scopeTag}_${dateStamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`📄 Exported ${list.length} trades (with notes & screenshot data) to CSV!`);
+  };
+
+  const handleExportLedgerHTML = () => {
+    const list = getExportTargetTrades();
+    if (list.length === 0) {
+      showToast('⚠️ No trades in the current view to export.');
+      return;
+    }
+
+    const escHtml = (str) =>
+      String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const closed = list.filter((t) => t.status === 'W' || t.status === 'L');
+    const wins = closed.filter((t) => t.status === 'W').length;
+    const winRate = closed.length > 0 ? ((wins / closed.length) * 100).toFixed(1) : '0.0';
+    const grossProf = closed.reduce((s, t) => s + (Number(t.profit) || 0), 0);
+    const grossLoss = closed.reduce((s, t) => s + (Number(t.loss) || 0), 0);
+    const netPnl = grossProf - grossLoss;
+    const pf = grossLoss > 0 ? (grossProf / grossLoss).toFixed(2) : grossProf > 0 ? '∞' : '0.00';
+    const totalPhotos = list.reduce((s, t) => s + ((t.screenshots || []).length || 0), 0);
+
+    const rowsHtml = list
+      .map((t) => {
+        const prof = Number(t.profit) || 0;
+        const loss = Number(t.loss) || 0;
+        const net = prof - loss;
+        const preNotes =
+          typeof t.preTradeAnalysis === 'string'
+            ? t.preTradeAnalysis
+            : t.preTradeAnalysis?.tradePlan || t.preAnalysis || '';
+        const postNotes =
+          typeof t.postTradeReview === 'string'
+            ? t.postTradeReview
+            : t.postTradeReview?.outcomeAnalysis || t.postAnalysis || '';
+        const shots = Array.isArray(t.screenshots) ? t.screenshots : [];
+        const statusBadge =
+          t.status === 'W'
+            ? '<span class="badge won">✓ Won</span>'
+            : t.status === 'L'
+            ? '<span class="badge lost">✕ Lost</span>'
+            : '<span class="badge open">◉ Open</span>';
+
+        const shotsHtml =
+          shots.length > 0
+            ? `<div class="shots-grid">${shots
+                .map(
+                  (s) => `
+                <div class="shot-card">
+                  <div class="shot-meta">
+                    <strong>${escHtml(s.type || 'SCREENSHOT')}:</strong> ${escHtml(s.filename || 'Attached Image')}
+                    <span class="shot-path">${escHtml(s.folderPath || '')}</span>
+                  </div>
+                  ${
+                    s.url
+                      ? `<a href="${s.url}" target="_blank" rel="noopener noreferrer"><img src="${s.url}" alt="${escHtml(
+                          s.filename || 'Trade Screenshot'
+                        )}" /></a>`
+                      : `<div class="no-img">Metadata saved (${escHtml(s.filename || 'No preview')})</div>`
+                  }
+                </div>`
+                )
+                .join('')}</div>`
+            : '';
+
+        return `
+        <div class="trade-card">
+          <div class="trade-header">
+            <div>
+              <span class="ticket">#${escHtml(t.ticketId)}</span>
+              <strong class="symbol">${escHtml(t.symbol)}</strong>
+              <span class="side ${t.side === 'Buy' ? 'buy' : 'sell'}">${escHtml(t.side)} (${escHtml(
+          t.lots ?? 1
+        )} Lot)</span>
+              <span class="stage-pill">${escHtml(t.stage)} • Acct #${escHtml(t.accountNumber)}</span>
+            </div>
+            <div class="trade-pnl">
+              ${statusBadge}
+              <strong class="${net >= 0 ? 'pos' : 'neg'}">${
+          t.status === 'O' ? 'OPEN' : net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`
+        }</strong>
+            </div>
+          </div>
+          <div class="trade-meta">
+            <span><strong>Exec Date:</strong> ${escHtml(t.execDate)}</span>
+            <span><strong>Close Date:</strong> ${escHtml(t.status === 'O' ? 'Pending' : t.closeDate || '-')}</span>
+            <span><strong>Session:</strong> ${escHtml(t.session || 'NY')}</span>
+            <span><strong>Category:</strong> ${escHtml(t.category || '-')}</span>
+            <span><strong>Risk %:</strong> ${escHtml(t.riskPct ?? '-')}%</span>
+            <span><strong>R-Multiple:</strong> ${escHtml(t.status === 'O' ? 'Pending' : t.rMultiple ?? '-')}R</span>
+          </div>
+          <div class="notes-grid">
+            <div class="note-box pre">
+              <h4>1. Pre-Trade Analysis (Before Trade)</h4>
+              <p>${escHtml(preNotes || 'No pre-trade notes recorded.')}</p>
+            </div>
+            <div class="note-box post">
+              <h4>2. Post-Trade Review (After Trade)</h4>
+              <p>${escHtml(postNotes || 'No post-trade review recorded.')}</p>
+            </div>
+          </div>
+          ${shotsHtml}
+        </div>`;
+      })
+      .join('\n');
+
+    const htmlDoc = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TradeAtlas - Crowevar | Execution Journal & Trade Ledger Export</title>
+  <style>
+    body { background: #050811; color: #f8fafc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 32px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .top-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 20px; margin-bottom: 24px; }
+    .brand h1 { margin: 0; font-size: 24px; letter-spacing: 0.5px; }
+    .brand h1 span { color: #06b6d4; }
+    .brand p { margin: 4px 0 0; color: #94a3b8; font-size: 13px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .kpi-card { background: #090d1a; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; }
+    .kpi-card span { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; display: block; }
+    .kpi-card strong { font-size: 22px; margin-top: 6px; display: block; }
+    .pos { color: #34d399; }
+    .neg { color: #fb7185; }
+    .trade-card { background: #090d1a; border: 1px solid #1e293b; border-radius: 16px; padding: 20px; margin-bottom: 18px; page-break-inside: avoid; }
+    .trade-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 12px; }
+    .ticket { font-family: monospace; color: #fcd34d; font-weight: 700; margin-right: 10px; font-size: 14px; }
+    .symbol { font-size: 16px; color: #fff; margin-right: 10px; }
+    .side { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-right: 10px; }
+    .side.buy { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+    .side.sell { background: rgba(244, 63, 94, 0.15); color: #fda4af; }
+    .stage-pill { background: #0d162c; border: 1px solid rgba(6, 182, 212, 0.35); color: #67e8f9; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .trade-pnl { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+    .badge { font-size: 11px; padding: 3px 9px; border-radius: 6px; font-weight: 700; }
+    .badge.won { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge.lost { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+    .badge.open { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+    .trade-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12px; color: #94a3b8; margin-bottom: 14px; }
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .note-box { background: #0b1122; border-radius: 12px; padding: 14px; border: 1px solid #1e293b; }
+    .note-box.pre { border-color: rgba(6, 182, 212, 0.35); }
+    .note-box.post { border-color: rgba(99, 102, 241, 0.35); }
+    .note-box h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: #38bdf8; }
+    .note-box.post h4 { color: #818cf8; }
+    .note-box p { margin: 0; font-size: 13px; color: #e2e8f0; white-space: pre-wrap; line-height: 1.5; }
+    .shots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 12px; }
+    .shot-card { background: #070b16; border: 1px solid #1e293b; border-radius: 12px; padding: 10px; }
+    .shot-meta { font-size: 11px; color: #cbd5e1; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 8px; }
+    .shot-path { color: #64748b; font-family: monospace; font-size: 10px; }
+    .shot-card img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 8px; border: 1px solid #1e293b; background: #000; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-header">
+      <div class="brand">
+        <h1>TRADE<span>ATLAS</span> — CROWEVAR</h1>
+        <p>Execution Journal &amp; Trade Ledger Complete Export (${escHtml(
+          ledgerExportScope === 'ALL' ? 'All Stages & Accounts' : activeContext
+        )}) • Generated ${new Date().toLocaleString()}</p>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><span>Total Trades Exported</span><strong>${list.length}</strong></div>
+      <div class="kpi-card"><span>Closed Win Rate</span><strong>${winRate}% (${wins}/${closed.length})</strong></div>
+      <div class="kpi-card"><span>Net Realized P&amp;L</span><strong class="${netPnl >= 0 ? 'pos' : 'neg'}">${
+      netPnl >= 0 ? `+$${netPnl.toFixed(2)}` : `-$${Math.abs(netPnl).toFixed(2)}`
+    }</strong></div>
+      <div class="kpi-card"><span>Gross Profit / Loss</span><strong><span class="pos">+$${grossProf.toFixed(
+        2
+      )}</span> / <span class="neg">-$${grossLoss.toFixed(2)}</span></strong></div>
+      <div class="kpi-card"><span>Profit Factor</span><strong>${pf}</strong></div>
+      <div class="kpi-card"><span>Embedded Screenshots</span><strong>${totalPhotos} Photos</strong></div>
+    </div>
+    ${rowsHtml}
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const scopeTag = ledgerExportScope === 'ALL' ? 'All_Accounts' : activeContext.replace(/\s+/g, '_');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TradeAtlas_Crowevar_${scopeTag}_Report_${dateStamp}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`🌐 Exported ${list.length} trades with embedded screenshots & notes to HTML!`);
+  };
 
   // ============================================================================
   // SUPABASE CLOUD DATABASE SYNC (CROSS-DEVICE SCREENSHOTS, NOTES & TRADES)
@@ -1834,6 +2156,60 @@ function JournalDashboard() {
               <input type="text" placeholder="Search symbol, ticket, notes..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-[#0d1326] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white" />
               <button onClick={handleOpenNewTradeModal} className="flex items-center gap-1.5 bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 px-3 py-1.5 rounded-lg text-xs font-semibold">
                 <Plus className="w-3.5 h-3.5" /><span>+ Log Trade</span>
+              </button>
+            </div>
+          </div>
+
+          {/* EXECUTION JOURNAL & TRADE LEDGER EXPORT BAR (CSV & HTML WITH SCREENSHOTS/NOTES) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0b1122] border border-slate-800/90 rounded-xl px-4 py-2.5 mb-3 text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <Download className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="font-bold text-white">Export Trade Ledger, Notes &amp; Screenshots:</span>
+              <div className="inline-flex rounded-lg bg-[#070b16] p-0.5 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setLedgerExportScope('CURRENT')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                    ledgerExportScope === 'CURRENT'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Current View ({filteredTrades.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLedgerExportScope('ALL')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                    ledgerExportScope === 'ALL'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All Accounts ({trades.length})
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportLedgerCSV}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-bold transition shadow-sm"
+                title="Export trades, Pre/Post-Trade notes, and screenshot data to CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV (with Notes &amp; Screenshots)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportLedgerHTML}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 font-bold transition shadow-sm"
+                title="Export standalone HTML report with embedded screenshots and full Pre/Post-Trade notes"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Export HTML Report (with Photos &amp; Notes)</span>
               </button>
             </div>
           </div>
