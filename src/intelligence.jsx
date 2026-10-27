@@ -196,7 +196,34 @@ const evaluateTradeWithAICoach = (t) => {
   };
 };
 
+class IntelligenceErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.warn('Intelligence suite silent catch:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return null; // Gracefully fail without crashing the main journal app
+    }
+    return this.props.children;
+  }
+}
+
 export function TradeAtlasIntelligenceSuite() {
+  return (
+    <IntelligenceErrorBoundary>
+      <TradeAtlasIntelligenceInner />
+    </IntelligenceErrorBoundary>
+  );
+}
+
+function TradeAtlasIntelligenceInner() {
   const [bridge, setBridge] = useState(() => window.__TRADEATLAS_STATE__ || null);
   const [activeTab, setActiveTab] = useState('EDGE_FINDER'); // 'EDGE_FINDER' | 'SESSIONS' | 'PSYCH_MISTAKES' | 'INSTITUTIONAL' | 'PROP_TRACKER' | 'AI_COACH'
   const [datePreset, setDatePreset] = useState('ALL'); // 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'LAST_30' | 'YTD'
@@ -247,40 +274,28 @@ export function TradeAtlasIntelligenceSuite() {
     };
   }, []);
 
-  // Create or locate portal mount point inside the main JournalDashboard (never inside the top RBAC bar)
+  // Create or locate portal mount point safely
   useEffect(() => {
     const ensureMount = () => {
-      let existing = document.getElementById('tradeatlas-intelligence-mount');
-      if (existing && existing.closest('[data-rbac-ui="true"]')) {
-        existing.remove();
-        existing = null;
-      }
-      if (!existing) {
-        // Find the Execution Journal & Trade Ledger section or main dashboard container
-        const allHeadings = Array.from(document.querySelectorAll('h2, h3, div, span'));
-        const ledgerHeading = allHeadings.find((el) => {
-          const t = (el.textContent || '').trim().toUpperCase();
-          return (
-            (t === 'EXECUTION JOURNAL & TRADE LEDGER' || t.includes('EXECUTION JOURNAL & TRADE LEDGER')) &&
-            !el.closest('[data-rbac-ui="true"]')
-          );
-        });
-
-        if (ledgerHeading) {
-          const targetSection = ledgerHeading.closest('section') || ledgerHeading.parentElement?.parentElement;
-          if (targetSection && targetSection.parentNode) {
+      try {
+        let existing = document.getElementById('tradeatlas-intelligence-mount');
+        if (!existing) {
+          const mainContainer = document.querySelector('main') || document.querySelector('.max-w-7xl');
+          if (mainContainer) {
             existing = document.createElement('div');
             existing.id = 'tradeatlas-intelligence-mount';
             existing.className = 'my-6';
-            targetSection.parentNode.insertBefore(existing, targetSection);
+            mainContainer.insertBefore(existing, mainContainer.firstChild);
           }
         }
-      }
-      if (existing && existing !== portalContainer) {
-        setPortalContainer(existing);
-      }
+        if (existing && existing !== portalContainer) {
+          setPortalContainer(existing);
+        }
+      } catch (e) {}
     };
     ensureMount();
+    const timer = setInterval(ensureMount, 800);
+    return () => clearInterval(timer);
     const timer = setInterval(ensureMount, 600);
     return () => clearInterval(timer);
   }, [portalContainer]);
