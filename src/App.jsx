@@ -1018,6 +1018,113 @@ function JournalDashboard() {
   const [cloudInitialLoaded, setCloudInitialLoaded] = useState(false);
   const isPullingFromCloudRef = React.useRef(false);
 
+  // Compress large Base64 screenshots so POST payloads to Supabase stay fast & under size limits
+  const compressDataUrl = (dataUrl, maxWidth = 1280, quality = 0.76) =>
+    new Promise((resolve) => {
+      if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/') || dataUrl.length < 90000) {
+        resolve(dataUrl || '');
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let w = img.width || 1280;
+          let h = img.height || 720;
+          if (w > maxWidth) {
+            h = Math.round((h * maxWidth) / w);
+            w = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed.length < dataUrl.length ? compressed : dataUrl);
+        } catch (e) {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
+  const prepareTradesForCloud = async (tradesList) => {
+    const clean = (tradesList || []).filter((t) => !isPhantomMockTrade(t));
+    return Promise.all(
+      clean.map(async (t) => {
+        if (!Array.isArray(t.screenshots) || t.screenshots.length === 0) return t;
+        const compressedShots = await Promise.all(
+          t.screenshots.map(async (s) => {
+            if (!s || !s.url) return s;
+            const newUrl = await compressDataUrl(s.url, 1280, 0.76);
+            return { ...s, url: newUrl };
+          })
+        );
+        return { ...t, screenshots: compressedShots };
+      })
+    );
+  };
+
+  // Merge local and cloud trades so local notes/screenshots are never lost on startup pull
+  const mergeLocalAndRemoteTrades = (localList, remoteList) => {
+    const map = new Map();
+    (remoteList || []).forEach((raw, idx) => {
+      if (isPhantomMockTrade(raw)) return;
+      const t = sanitizeTrade(raw, idx);
+      map.set(`${t.stage}::${t.ticketId}`, t);
+    });
+    (localList || []).forEach((raw, idx) => {
+      if (isPhantomMockTrade(raw)) return;
+      const loc = sanitizeTrade(raw, idx);
+      const key = `${loc.stage}::${loc.ticketId}`;
+      const rem = map.get(key);
+      if (!rem) {
+        map.set(key, loc);
+      } else {
+        const merged = { ...rem, ...loc };
+        const locPre = String(loc.preAnalysis || loc.preTradeAnalysis?.tradePlan || '').trim();
+        const remPre = String(rem.preAnalysis || rem.preTradeAnalysis?.tradePlan || '').trim();
+        if (remPre.length > locPre.length) {
+          merged.preAnalysis = rem.preAnalysis;
+          merged.preTradeAnalysis = rem.preTradeAnalysis;
+        }
+        const locPost = String(loc.postAnalysis || loc.postTradeReview?.outcomeAnalysis || '').trim();
+        const remPost = String(rem.postAnalysis || rem.postTradeReview?.outcomeAnalysis || '').trim();
+        if (remPost.length > locPost.length) {
+          merged.postAnalysis = rem.postAnalysis;
+          merged.postTradeReview = rem.postTradeReview;
+        }
+        const locShots = (loc.screenshots || []).filter((s) => s && s.url);
+        const remShots = (rem.screenshots || []).filter((s) => s && s.url);
+        if (remShots.length > locShots.length) {
+          merged.screenshots = rem.screenshots;
+        } else if (locShots.length > 0) {
+          merged.screenshots = loc.screenshots;
+        }
+        map.set(key, merged);
+      }
+    });
+    return Array.from(map.values());
+  };
+
+  const buildSupabaseHeaders = (cleanKey, includePrefer = false) => {
+    const hdrs = {
+      apikey: cleanKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    };
+    if (!cleanKey.startsWith('sb_')) {
+      hdrs.Authorization = `Bearer ${cleanKey}`;
+    } else {
+      hdrs.Authorization = `Bearer ${cleanKey}`;
+    }
+    if (includePrefer) {
+      hdrs.Prefer = 'resolution=merge-duplicates,return=minimal';
+    }
+    return hdrs;
+  };
+
   const pullFromCloud = async (urlOverride = cloudUrl, keyOverride = cloudKey, silent = false) => {
     const cleanUrl = normalizeSupabaseUrl(urlOverride);
     const cleanKey = normalizeSupabaseKey(keyOverride);
@@ -1028,37 +1135,43 @@ function JournalDashboard() {
     }
     try {
       setCloudStatus('Syncing...');
-      const res = await fetch(`${cleanUrl}/rest/v1/journal_store?id=eq.master&select=*`, {
+      let res = await fetch(`${cleanUrl}/rest/v1/journal_store?id=eq.master&select=*`, {
         method: 'GET',
-        headers: {
-          apikey: cleanKey,
-          Authorization: `Bearer ${cleanKey}`,
-          Accept: 'application/json'
-        }
+        headers: buildSupabaseHeaders(cleanKey, false)
       });
+      if ((res.status === 401 || res.status === 403) && cleanKey.startsWith('sb_')) {
+        res = await fetch(`${cleanUrl}/rest/v1/journal_store?id=eq.master&select=*`, {
+          method: 'GET',
+          headers: { apikey: cleanKey, Accept: 'application/json' }
+        });
+      }
       if (!res.ok) {
         const errTxt = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status}: ${errTxt}`);
+        throw new Error(`HTTP ${res.status} ${errTxt}`);
       }
       const rows = await res.json();
       if (Array.isArray(rows) && rows.length > 0) {
         const remote = rows[0];
         isPullingFromCloudRef.current = true;
-        if (Array.isArray(remote.trades) && remote.trades.length > 0) {
-          const cleaned = remote.trades
-            .filter((t) => !isPhantomMockTrade(t))
-            .map((t, i) => sanitizeTrade(t, i));
-          if (typeof fullTradesVaultRef !== 'undefined' && fullTradesVaultRef.current !== undefined) {
-            fullTradesVaultRef.current = cleaned;
-          }
-          const rbac = window.__CROWEVAR_RBAC__;
-          const visibleTrades =
-            rbac && !rbac.can('viewLiveAccounts')
-              ? cleaned.filter((t) => t.stage !== 'Live Personal')
-              : cleaned;
-          setTrades(visibleTrades);
-          idbSaveTrades(cleaned);
+        const currentFullLocal =
+          typeof fullTradesVaultRef !== 'undefined' && Array.isArray(fullTradesVaultRef.current)
+            ? fullTradesVaultRef.current
+            : trades;
+        const remoteTrades = Array.isArray(remote.trades) ? remote.trades : [];
+        const mergedAll = mergeLocalAndRemoteTrades(currentFullLocal, remoteTrades);
+
+        if (typeof fullTradesVaultRef !== 'undefined') {
+          fullTradesVaultRef.current = mergedAll;
         }
+        const rbac = window.__CROWEVAR_RBAC__;
+        const visibleTrades =
+          rbac && !rbac.can('viewLiveAccounts')
+            ? mergedAll.filter((t) => t.stage !== 'Live Personal')
+            : mergedAll;
+
+        setTrades(visibleTrades);
+        idbSaveTrades(mergedAll);
+
         if (Array.isArray(remote.profiles) && remote.profiles.length > 0) {
           setProfiles(remote.profiles.map(normalizeProfile));
         }
@@ -1067,10 +1180,18 @@ function JournalDashboard() {
         }
         setTimeout(() => {
           isPullingFromCloudRef.current = false;
-        }, 1200);
+        }, 1500);
+
         setCloudStatus('Synced');
         setLastSyncedAt(new Date().toLocaleTimeString());
-        if (!silent) showToast('☁️ Pulled latest trades, notes & screenshots from Cloud!');
+        if (!silent) showToast('☁️ Synced latest trades, notes & screenshots from Cloud!');
+
+        // If local had newer trades/screenshots not yet in remote, push the merged state up
+        if (mergedAll.length > remoteTrades.length && (!rbac || rbac.canWriteData)) {
+          setTimeout(() => {
+            pushToCloud(cleanUrl, cleanKey, mergedAll, profiles, recycleBin, true);
+          }, 600);
+        }
       } else {
         await pushToCloud(cleanUrl, cleanKey, trades, profiles, recycleBin, true);
       }
@@ -1079,7 +1200,7 @@ function JournalDashboard() {
       console.error('Cloud pull error:', err);
       setCloudStatus('Error');
       setCloudInitialLoaded(true);
-      if (!silent) showToast(`⚠️ Cloud pull failed (${err.message || 'Check URL & Key'})`);
+      if (!silent) showToast(`⚠️ Cloud Pull Error: ${err.message}`);
     }
   };
 
@@ -1095,7 +1216,6 @@ function JournalDashboard() {
     const cleanKey = normalizeSupabaseKey(keyOverride);
     if (!cleanUrl || !cleanKey) return;
 
-    // In background Visitor Mode, do not push filtered visitor state to Cloud
     const rbac = window.__CROWEVAR_RBAC__;
     if (silent && rbac && !rbac.canWriteData) {
       setCloudStatus('Synced');
@@ -1104,43 +1224,86 @@ function JournalDashboard() {
 
     try {
       setCloudStatus('Syncing...');
-      // Ensure we always push the full trade list (including Live Personal if stored in vault ref)
-      let masterTradesToPush = tradesPayload;
+      let masterTrades = tradesPayload;
       if (
         typeof fullTradesVaultRef !== 'undefined' &&
         Array.isArray(fullTradesVaultRef.current) &&
-        fullTradesVaultRef.current.length > tradesPayload.length
+        fullTradesVaultRef.current.length >= tradesPayload.length
       ) {
-        masterTradesToPush = fullTradesVaultRef.current;
+        masterTrades = mergeLocalAndRemoteTrades(tradesPayload, fullTradesVaultRef.current);
+        fullTradesVaultRef.current = masterTrades;
       }
 
-      const res = await fetch(`${cleanUrl}/rest/v1/journal_store?on_conflict=id`, {
-        method: 'POST',
-        headers: {
-          apikey: cleanKey,
-          Authorization: `Bearer ${cleanKey}`,
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal'
-        },
-        body: JSON.stringify({
-          id: 'master',
-          trades: masterTradesToPush.filter((t) => !isPhantomMockTrade(t)),
-          profiles: profilesPayload,
-          trash: trashPayload,
-          updated_at: new Date().toISOString()
-        })
-      });
+      // Compress Base64 screenshots so the POST body stays small and fast
+      const optimizedTrades = await prepareTradesForCloud(masterTrades);
+
+      const sendUpsert = async (bodyObj, omitBearer = false) => {
+        const headers = omitBearer
+          ? {
+              apikey: cleanKey,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=merge-duplicates,return=minimal'
+            }
+          : buildSupabaseHeaders(cleanKey, true);
+
+        return fetch(`${cleanUrl}/rest/v1/journal_store?on_conflict=id`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(bodyObj)
+        });
+      };
+
+      const fullPayload = {
+        id: 'master',
+        trades: optimizedTrades,
+        profiles: profilesPayload,
+        trash: trashPayload,
+        updated_at: new Date().toISOString()
+      };
+
+      let res = await sendUpsert(fullPayload, false);
+
+      // Fallback 1: If sb_publishable_ key rejected Bearer header, retry with apikey only
+      if ((res.status === 401 || res.status === 403) && cleanKey.startsWith('sb_')) {
+        res = await sendUpsert(fullPayload, true);
+      }
+
+      // Fallback 2: If payload still too large (413) or schema column mismatch (400), retry with stronger image compression
+      if (!res.ok) {
+        const superCompressedTrades = await Promise.all(
+          optimizedTrades.map(async (t) => ({
+            ...t,
+            screenshots: await Promise.all(
+              (t.screenshots || []).map(async (s) => ({
+                ...s,
+                url: s?.url ? await compressDataUrl(s.url, 800, 0.6) : ''
+              }))
+            )
+          }))
+        );
+        res = await sendUpsert(
+          {
+            id: 'master',
+            trades: superCompressedTrades,
+            profiles: profilesPayload,
+            trash: trashPayload
+          },
+          false
+        );
+      }
+
       if (!res.ok) {
         const errTxt = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${errTxt}`);
       }
+
       setCloudStatus('Synced');
       setLastSyncedAt(new Date().toLocaleTimeString());
-      if (!silent) showToast('☁️ All trades, notes & screenshots saved to Cloud!');
+      if (!silent) showToast('☁️ All trades, notes & screenshots synced to Cloud!');
     } catch (err) {
       console.error('Cloud push error:', err);
       setCloudStatus('Error');
-      if (!silent) showToast(`⚠️ Cloud push failed (${err.message || 'Check connection'})`);
+      if (!silent) showToast(`⚠️ Cloud Push Error: ${err.message}`);
     }
   };
 
@@ -1162,7 +1325,7 @@ function JournalDashboard() {
     if (rbac && !rbac.canWriteData) return;
     const timer = setTimeout(() => {
       pushToCloud(cloudUrl, cloudKey, trades, profiles, recycleBin, true);
-    }, 800);
+    }, 900);
     return () => clearTimeout(timer);
   }, [trades, profiles, recycleBin, cloudInitialLoaded]);
 
