@@ -608,7 +608,22 @@ function JournalDashboard() {
   useEffect(() => {
     const handleRbacChange = () => setRbacTick((n) => n + 1);
     window.addEventListener('crowevar-rbac-change', handleRbacChange);
-    return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange);
+  
+// Live Bridge for TradeAtlas Intelligence & Behavioral Analytics Suite
+  useEffect(() => {
+    window.__TRADEATLAS_STATE__ = {
+      trades,
+      setTrades,
+      activeContext,
+      setActiveContext,
+      profiles,
+      selectedAccount: typeof selectedAccountFilter !== 'undefined' ? selectedAccountFilter : 'ALL',
+      accountSize: typeof accountSize !== 'undefined' ? accountSize : 10000
+    };
+    window.dispatchEvent(new CustomEvent('tradeatlas-state-sync', { detail: window.__TRADEATLAS_STATE__ }));
+  }, [trades, activeContext, profiles]);
+
+  return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange);
   }, []);
 
   useEffect(() => {
