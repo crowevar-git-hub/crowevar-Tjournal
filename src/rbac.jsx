@@ -337,7 +337,7 @@ export function RBACSecurityProvider({ children }) {
 
   // Pull RBAC Config from Supabase on startup if configured
   useEffect(() => {
-    const sbUrl = (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '').replace(/\/rest\/v1$/i, '');
+    const sbUrl = (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1.*$/i, '').replace(/\/rest\/v1$/i, '').replace(/\/rest\/v1$/i, '');
     const sbKey = (import.meta.env?.VITE_SUPABASE_ANON_KEY || localStorage.getItem('crowevar_supabase_key') || '').trim();
     if (!sbUrl || !sbKey) return;
     fetch(`${sbUrl}/rest/v1/journal_store?id=eq.rbac_config&select=*`, {
@@ -363,7 +363,7 @@ export function RBACSecurityProvider({ children }) {
   }, []);
 
   const pushRbacToCloud = (nextStore) => {
-    const sbUrl = (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '').replace(/\/rest\/v1$/i, '');
+    const sbUrl = (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1.*$/i, '').replace(/\/rest\/v1$/i, '').replace(/\/rest\/v1$/i, '');
     const sbKey = (import.meta.env?.VITE_SUPABASE_ANON_KEY || localStorage.getItem('crowevar_supabase_key') || '').trim();
     if (!sbUrl || !sbKey) return;
     fetch(`${sbUrl}/rest/v1/journal_store`, {
@@ -407,45 +407,6 @@ export function RBACSecurityProvider({ children }) {
 
     window.dispatchEvent(new CustomEvent('crowevar-rbac-change', { detail: window.__CROWEVAR_RBAC__ }));
   }, [isAuthenticated, isAdmin, currentUser, effectivePermissions, canWriteData]);
-
-  // Network-Level Fetch Guard: Safely bound to window to prevent strict-mode Illegal Invocation errors
-  useEffect(() => {
-    if (!window.__CROWEVAR_NATIVE_FETCH__) {
-      window.__CROWEVAR_NATIVE_FETCH__ = window.fetch.bind(window);
-    }
-    const nativeFetch = window.__CROWEVAR_NATIVE_FETCH__;
-
-    window.fetch = async function (...args) {
-      const urlStr = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-      const opts = args[1] || {};
-      const method = String(opts.method || 'GET').toUpperCase();
-
-      if (urlStr.includes('/rest/v1/journal_store') && method !== 'GET' && method !== 'HEAD') {
-        let isRbacSync = false;
-        try {
-          if (typeof opts.body === 'string' && opts.body.includes('"id":"rbac_config"')) {
-            isRbacSync = true;
-          }
-        } catch (e) {}
-
-        const rbac = window.__CROWEVAR_RBAC__;
-        // Only block if RBAC is initialized and user is an unauthorized visitor
-        if (rbac) {
-          if (isRbacSync && !rbac.isAdmin) {
-            return new Response(JSON.stringify({ error: 'RBAC: Admin privileges required' }), { status: 403 });
-          }
-          if (!isRbacSync && !rbac.canWriteData) {
-            return new Response(JSON.stringify({ status: 'visitor_read_only_blocked' }), { status: 200 });
-          }
-        }
-      }
-      return nativeFetch(...args);
-    };
-
-    return () => {
-      window.fetch = nativeFetch;
-    };
-  }, []);
 
   // Direct URL & Route Access Guard
   useEffect(() => {

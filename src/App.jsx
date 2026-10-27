@@ -989,15 +989,38 @@ function JournalDashboard() {
   // SUPABASE CLOUD DATABASE SYNC (CROSS-DEVICE SCREENSHOTS, NOTES & TRADES)
   // ============================================================================
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
-  const [cloudUrl, setCloudUrl] = useState(() => (import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('crowevar_supabase_url') || '').trim());
-  const [cloudKey, setCloudKey] = useState(() => (import.meta.env?.VITE_SUPABASE_ANON_KEY || localStorage.getItem('crowevar_supabase_key') || '').trim());
-  const [cloudStatus, setCloudStatus] = useState('Idle'); // 'Synced' | 'Syncing...' | 'Error' | 'Not Configured'
+
+  const normalizeSupabaseUrl = (raw) => {
+    const s = String(raw || '').trim();
+    const match = s.match(/https?:\/\/[a-z0-9-]+\.supabase\.co/i);
+    if (match) return match[0].toLowerCase();
+    return s.replace(/\/+$/, '').replace(/\/rest\/v1.*$/i, '');
+  };
+
+  const normalizeSupabaseKey = (raw) => {
+    return String(raw || '').trim().replace(/^Bearer\s+/i, '');
+  };
+
+  const [cloudUrl, setCloudUrl] = useState(() => {
+    const envUrl = normalizeSupabaseUrl(import.meta.env?.VITE_SUPABASE_URL || '');
+    const locUrl = normalizeSupabaseUrl(localStorage.getItem('crowevar_supabase_url') || '');
+    return envUrl || locUrl || '';
+  });
+
+  const [cloudKey, setCloudKey] = useState(() => {
+    const envKey = normalizeSupabaseKey(import.meta.env?.VITE_SUPABASE_ANON_KEY || '');
+    const locKey = normalizeSupabaseKey(localStorage.getItem('crowevar_supabase_key') || '');
+    return envKey || locKey || '';
+  });
+
+  const [cloudStatus, setCloudStatus] = useState('Idle');
   const [lastSyncedAt, setLastSyncedAt] = useState('');
   const [cloudInitialLoaded, setCloudInitialLoaded] = useState(false);
+  const isPullingFromCloudRef = React.useRef(false);
 
   const pullFromCloud = async (urlOverride = cloudUrl, keyOverride = cloudKey, silent = false) => {
-    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
-    const cleanKey = String(keyOverride || '').trim();
+    const cleanUrl = normalizeSupabaseUrl(urlOverride);
+    const cleanKey = normalizeSupabaseKey(keyOverride);
     if (!cleanUrl || !cleanKey) {
       setCloudStatus('Not Configured');
       setCloudInitialLoaded(true);
@@ -1006,19 +1029,34 @@ function JournalDashboard() {
     try {
       setCloudStatus('Syncing...');
       const res = await fetch(`${cleanUrl}/rest/v1/journal_store?id=eq.master&select=*`, {
+        method: 'GET',
         headers: {
           apikey: cleanKey,
           Authorization: `Bearer ${cleanKey}`,
-          'Content-Type': 'application/json'
+          Accept: 'application/json'
         }
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errTxt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${errTxt}`);
+      }
       const rows = await res.json();
       if (Array.isArray(rows) && rows.length > 0) {
         const remote = rows[0];
+        isPullingFromCloudRef.current = true;
         if (Array.isArray(remote.trades) && remote.trades.length > 0) {
-          const cleaned = remote.trades.filter((t) => !isPhantomMockTrade(t)).map((t, i) => sanitizeTrade(t, i));
-          setTrades(cleaned);
+          const cleaned = remote.trades
+            .filter((t) => !isPhantomMockTrade(t))
+            .map((t, i) => sanitizeTrade(t, i));
+          if (typeof fullTradesVaultRef !== 'undefined' && fullTradesVaultRef.current !== undefined) {
+            fullTradesVaultRef.current = cleaned;
+          }
+          const rbac = window.__CROWEVAR_RBAC__;
+          const visibleTrades =
+            rbac && !rbac.can('viewLiveAccounts')
+              ? cleaned.filter((t) => t.stage !== 'Live Personal')
+              : cleaned;
+          setTrades(visibleTrades);
           idbSaveTrades(cleaned);
         }
         if (Array.isArray(remote.profiles) && remote.profiles.length > 0) {
@@ -1027,11 +1065,13 @@ function JournalDashboard() {
         if (Array.isArray(remote.trash)) {
           setRecycleBin(remote.trash);
         }
+        setTimeout(() => {
+          isPullingFromCloudRef.current = false;
+        }, 1200);
         setCloudStatus('Synced');
         setLastSyncedAt(new Date().toLocaleTimeString());
         if (!silent) showToast('☁️ Pulled latest trades, notes & screenshots from Cloud!');
       } else {
-        // First time connecting: push local state up to initialize the cloud row
         await pushToCloud(cleanUrl, cleanKey, trades, profiles, recycleBin, true);
       }
       setCloudInitialLoaded(true);
@@ -1039,7 +1079,7 @@ function JournalDashboard() {
       console.error('Cloud pull error:', err);
       setCloudStatus('Error');
       setCloudInitialLoaded(true);
-      if (!silent) showToast('⚠️ Cloud connection failed. Check your Supabase URL & Anon Key.');
+      if (!silent) showToast(`⚠️ Cloud pull failed (${err.message || 'Check URL & Key'})`);
     }
   };
 
@@ -1051,35 +1091,56 @@ function JournalDashboard() {
     trashPayload = recycleBin,
     silent = true
   ) => {
-    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
-    const cleanKey = String(keyOverride || '').trim();
+    const cleanUrl = normalizeSupabaseUrl(urlOverride);
+    const cleanKey = normalizeSupabaseKey(keyOverride);
     if (!cleanUrl || !cleanKey) return;
+
+    // In background Visitor Mode, do not push filtered visitor state to Cloud
+    const rbac = window.__CROWEVAR_RBAC__;
+    if (silent && rbac && !rbac.canWriteData) {
+      setCloudStatus('Synced');
+      return;
+    }
+
     try {
       setCloudStatus('Syncing...');
+      // Ensure we always push the full trade list (including Live Personal if stored in vault ref)
+      let masterTradesToPush = tradesPayload;
+      if (
+        typeof fullTradesVaultRef !== 'undefined' &&
+        Array.isArray(fullTradesVaultRef.current) &&
+        fullTradesVaultRef.current.length > tradesPayload.length
+      ) {
+        masterTradesToPush = fullTradesVaultRef.current;
+      }
+
       const res = await fetch(`${cleanUrl}/rest/v1/journal_store?on_conflict=id`, {
         method: 'POST',
         headers: {
           apikey: cleanKey,
           Authorization: `Bearer ${cleanKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates'
+          Prefer: 'resolution=merge-duplicates,return=minimal'
         },
         body: JSON.stringify({
           id: 'master',
-          trades: tradesPayload.filter((t) => !isPhantomMockTrade(t)),
+          trades: masterTradesToPush.filter((t) => !isPhantomMockTrade(t)),
           profiles: profilesPayload,
           trash: trashPayload,
           updated_at: new Date().toISOString()
         })
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errTxt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${errTxt}`);
+      }
       setCloudStatus('Synced');
       setLastSyncedAt(new Date().toLocaleTimeString());
       if (!silent) showToast('☁️ All trades, notes & screenshots saved to Cloud!');
     } catch (err) {
       console.error('Cloud push error:', err);
       setCloudStatus('Error');
-      if (!silent) showToast('⚠️ Failed to push to Cloud database.');
+      if (!silent) showToast(`⚠️ Cloud push failed (${err.message || 'Check connection'})`);
     }
   };
 
@@ -1096,6 +1157,9 @@ function JournalDashboard() {
   // Auto-push to Cloud whenever trades, notes, screenshots, accounts, or trash change
   useEffect(() => {
     if (!cloudInitialLoaded || !cloudUrl || !cloudKey) return;
+    if (isPullingFromCloudRef.current) return;
+    const rbac = window.__CROWEVAR_RBAC__;
+    if (rbac && !rbac.canWriteData) return;
     const timer = setTimeout(() => {
       pushToCloud(cloudUrl, cloudKey, trades, profiles, recycleBin, true);
     }, 800);
