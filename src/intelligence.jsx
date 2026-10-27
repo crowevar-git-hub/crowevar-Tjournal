@@ -247,23 +247,32 @@ export function TradeAtlasIntelligenceSuite() {
     };
   }, []);
 
-  // Create or locate portal mount point right inside the main dashboard container
+  // Create or locate portal mount point inside the main JournalDashboard (never inside the top RBAC bar)
   useEffect(() => {
     const ensureMount = () => {
       let existing = document.getElementById('tradeatlas-intelligence-mount');
+      if (existing && existing.closest('[data-rbac-ui="true"]')) {
+        existing.remove();
+        existing = null;
+      }
       if (!existing) {
-        const mainContainer = document.querySelector('main') || document.querySelector('.max-w-7xl.mx-auto');
-        if (mainContainer) {
-          existing = document.createElement('div');
-          existing.id = 'tradeatlas-intelligence-mount';
-          existing.className = 'my-6';
-          // Insert right before the Execution Journal & Trade Ledger section (or append to main)
-          const sections = mainContainer.querySelectorAll('section');
-          if (sections.length >= 2) {
-            const lastSection = sections[sections.length - 1];
-            lastSection.parentNode.insertBefore(existing, lastSection);
-          } else {
-            mainContainer.appendChild(existing);
+        // Find the Execution Journal & Trade Ledger section or main dashboard container
+        const allHeadings = Array.from(document.querySelectorAll('h2, h3, div, span'));
+        const ledgerHeading = allHeadings.find((el) => {
+          const t = (el.textContent || '').trim().toUpperCase();
+          return (
+            (t === 'EXECUTION JOURNAL & TRADE LEDGER' || t.includes('EXECUTION JOURNAL & TRADE LEDGER')) &&
+            !el.closest('[data-rbac-ui="true"]')
+          );
+        });
+
+        if (ledgerHeading) {
+          const targetSection = ledgerHeading.closest('section') || ledgerHeading.parentElement?.parentElement;
+          if (targetSection && targetSection.parentNode) {
+            existing = document.createElement('div');
+            existing.id = 'tradeatlas-intelligence-mount';
+            existing.className = 'my-6';
+            targetSection.parentNode.insertBefore(existing, targetSection);
           }
         }
       }
@@ -272,7 +281,7 @@ export function TradeAtlasIntelligenceSuite() {
       }
     };
     ensureMount();
-    const timer = setInterval(ensureMount, 1000);
+    const timer = setInterval(ensureMount, 600);
     return () => clearInterval(timer);
   }, [portalContainer]);
 
@@ -351,8 +360,31 @@ export function TradeAtlasIntelligenceSuite() {
 
   const rawTrades = bridge?.trades || [];
   const activeContext = bridge?.activeContext || 'Unified View';
-  const selectedAccount = bridge?.selectedAccount || 'ALL';
-  const accountSize = Number(bridge?.accountSize) || 10000;
+  const activeProfile = Array.isArray(bridge?.profiles) && bridge.profiles.length > 0 ? bridge.profiles[0] : null;
+  const stageKeyMap = {
+    'Stage 1': 'stage1',
+    'Stage 2': 'stage2',
+    'Funded Account': 'funded',
+    'Live Personal': 'live'
+  };
+  const currentStageKey = stageKeyMap[activeContext] || null;
+  const selectedAccount = useMemo(() => {
+    if (!currentStageKey || !activeProfile?.accounts?.[currentStageKey]) return 'ALL';
+    return activeProfile.accounts[currentStageKey].activeAccount || 'ALL';
+  }, [activeProfile, currentStageKey]);
+
+  const accountSize = useMemo(() => {
+    if (!activeProfile) return 10000;
+    if (currentStageKey && selectedAccount && selectedAccount !== 'ALL') {
+      const meta = activeProfile.accountMeta?.[selectedAccount];
+      if (meta?.startingBalance) return Number(meta.startingBalance) || 10000;
+      if (meta?.size) {
+        const num = parseFloat(String(meta.size).replace(/[^0-9.]/g, ''));
+        if (!isNaN(num)) return String(meta.size).toUpperCase().includes('K') ? num * 1000 : num;
+      }
+    }
+    return 10000;
+  }, [activeProfile, currentStageKey, selectedAccount]);
   const canEdit = Boolean(!window.__CROWEVAR_RBAC__ || window.__CROWEVAR_RBAC__.can('editTrades'));
 
   // Filter trades by Context, Account, and Quick Date Preset
