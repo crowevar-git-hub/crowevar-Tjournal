@@ -996,7 +996,7 @@ function JournalDashboard() {
   const [cloudInitialLoaded, setCloudInitialLoaded] = useState(false);
 
   const pullFromCloud = async (urlOverride = cloudUrl, keyOverride = cloudKey, silent = false) => {
-    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '');
+    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
     const cleanKey = String(keyOverride || '').trim();
     if (!cleanUrl || !cleanKey) {
       setCloudStatus('Not Configured');
@@ -1051,12 +1051,12 @@ function JournalDashboard() {
     trashPayload = recycleBin,
     silent = true
   ) => {
-    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '');
+    const cleanUrl = String(urlOverride || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
     const cleanKey = String(keyOverride || '').trim();
     if (!cleanUrl || !cleanKey) return;
     try {
       setCloudStatus('Syncing...');
-      const res = await fetch(`${cleanUrl}/rest/v1/journal_store`, {
+      const res = await fetch(`${cleanUrl}/rest/v1/journal_store?on_conflict=id`, {
         method: 'POST',
         headers: {
           apikey: cleanKey,
