@@ -455,7 +455,7 @@ export function RBACSecurityProvider({ children }) {
 
       allElements.forEach((el) => {
         const rawTxt = (el.textContent || '').trim();
-        if (rawTxt === 'Live Personal' || rawTxt === 'LIVE PERSONAL') {
+        if ((rawTxt === 'Live Personal' || rawTxt === 'LIVE PERSONAL') && !el.closest('.fixed')) {
           let curr = el;
           while (curr && curr.parentElement) {
             const parentCls = String(curr.parentElement.className || '');
