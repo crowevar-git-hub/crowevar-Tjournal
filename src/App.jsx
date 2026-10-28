@@ -613,7 +613,7 @@ function JournalDashboard() {
     };
     window.dispatchEvent(new CustomEvent('tradeatlas-state-sync', { detail: window.__TRADEATLAS_STATE__ }));
   }, [trades, activeContext, profiles]);
-  const fullTradesVaultRef = React.useRef(null);
+const fullTradesVaultRef = React.useRef(null);
   const [rbacTick, setRbacTick] = useState(0);
 
   // Listen to RBAC role/login changes and enforce stage permissions
@@ -2461,6 +2461,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
             </div>
           </div>
 
+          <div id="tradeatlas-intelligence-slot" className="my-6"></div>
           {/* EXECUTION JOURNAL & TRADE LEDGER EXPORT BAR (CSV & HTML WITH SCREENSHOTS/NOTES) */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0b1122] border border-slate-800/90 rounded-xl px-4 py-2.5 mb-3 text-xs">
             <div className="flex items-center gap-2 text-slate-300">
