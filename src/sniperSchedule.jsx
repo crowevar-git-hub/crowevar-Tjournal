@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Clock,
   Crosshair,
   ChevronDown,
   ChevronUp,
-  Maximize2,
-  Minimize2
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 
 export const SNIPER_WINDOWS_DATA = [
@@ -14,7 +13,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'FOREX',
     assetClass: 'Forex',
     tickers: 'EURUSD, GBPUSD',
-    windowName: 'London Open Killzone',
+    windowName: 'Window A: London Open Killzone',
     phtSummer: '2:45 PM – 5:00 PM',
     phtWinter: '3:45 PM – 6:00 PM',
     utcSummer: '06:45 – 09:00',
@@ -30,7 +29,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'FOREX',
     assetClass: 'Forex',
     tickers: 'EURUSD, GBPUSD',
-    windowName: 'London / NY Overlap',
+    windowName: 'Window B: London / NY Overlap',
     phtSummer: '8:00 PM – 10:30 PM',
     phtWinter: '9:00 PM – 11:30 PM',
     utcSummer: '12:00 – 14:30',
@@ -46,7 +45,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'GOLD',
     assetClass: 'Gold',
     tickers: 'XAUUSD',
-    windowName: 'COMEX / US Data Open',
+    windowName: 'Window A: COMEX / US Data Open',
     phtSummer: '8:20 PM – 10:00 PM',
     phtWinter: '9:20 PM – 11:00 PM',
     utcSummer: '12:20 – 14:00',
@@ -62,7 +61,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'GOLD',
     assetClass: 'Gold',
     tickers: 'XAUUSD',
-    windowName: 'London Bullion Momentum',
+    windowName: 'Window B: London Bullion Momentum',
     phtSummer: '3:00 PM – 5:30 PM',
     phtWinter: '4:00 PM – 6:30 PM',
     utcSummer: '07:00 – 09:30',
@@ -78,7 +77,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'INDEX',
     assetClass: 'Index',
     tickers: 'US100 / USTEC',
-    windowName: 'NYSE Cash Open + Silver Bullet',
+    windowName: 'Window A: NYSE Cash Open + Silver Bullet',
     phtSummer: '9:30 PM – 11:15 PM',
     phtWinter: '10:30 PM – 12:15 AM',
     utcSummer: '13:30 – 15:15',
@@ -94,7 +93,7 @@ export const SNIPER_WINDOWS_DATA = [
     category: 'INDEX',
     assetClass: 'Index',
     tickers: 'US100 / USTEC',
-    windowName: 'NY Afternoon / Power Hour',
+    windowName: 'Window B: NY Afternoon / Power Hour',
     phtSummer: '1:30 AM – 3:00 AM',
     phtWinter: '2:30 AM – 4:00 AM',
     utcSummer: '17:30 – 19:00',
@@ -107,21 +106,79 @@ export const SNIPER_WINDOWS_DATA = [
   }
 ];
 
-const isMinutesInRange = (curMins, startMins, endMins) => {
+// Helper: compute alignment status, progress %, and minutes remaining / until start
+const evaluateWindowAlignment = (curMins, startMins, endMins) => {
+  const duration = endMins - startMins;
+  let isAligned = false;
+  let elapsed = 0;
+
   if (endMins > 1440) {
-    return curMins >= startMins || curMins <= endMins - 1440;
+    const wrappedEnd = endMins - 1440;
+    if (curMins >= startMins) {
+      isAligned = true;
+      elapsed = curMins - startMins;
+    } else if (curMins <= wrappedEnd) {
+      isAligned = true;
+      elapsed = 1440 - startMins + curMins;
+    }
+  } else {
+    if (curMins >= startMins && curMins <= endMins) {
+      isAligned = true;
+      elapsed = curMins - startMins;
+    }
   }
-  return curMins >= startMins && curMins <= endMins;
+
+  if (isAligned) {
+    const remaining = Math.max(0, duration - elapsed);
+    const pct = Math.min(100, Math.max(0, (elapsed / (duration || 1)) * 100));
+    return {
+      isAligned: true,
+      remainingMins: remaining,
+      progressPct: pct,
+      minsUntilStart: 0
+    };
+  }
+
+  let untilStart = startMins - curMins;
+  if (untilStart < 0) untilStart += 1440;
+
+  return {
+    isAligned: false,
+    remainingMins: 0,
+    progressPct: 0,
+    minsUntilStart: untilStart
+  };
+};
+
+const formatDuration = (totalMins) => {
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+};
+
+// Detect if New York is currently observing EDT (Summer) or EST (Winter)
+const detectNewYorkSeason = () => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      timeZoneName: 'short'
+    }).formatToParts(new Date());
+    const tzName = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+    return tzName.includes('EDT') ? 'SUMMER' : 'WINTER';
+  } catch (e) {
+    return 'SUMMER';
+  }
 };
 
 export function SniperSchedulePanel() {
   const [isOpen, setIsOpen] = useState(true);
   const [assetFilter, setAssetFilter] = useState('ALL');
-  const [dstMode, setDstMode] = useState('SUMMER');
+  const [dstMode, setDstMode] = useState(() => detectNewYorkSeason());
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 15000);
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -151,8 +208,14 @@ export function SniperSchedulePanel() {
     return SNIPER_WINDOWS_DATA.map((row) => {
       const sMins = dstMode === 'SUMMER' ? row.summerStartMins : row.winterStartMins;
       const eMins = dstMode === 'SUMMER' ? row.summerEndMins : row.winterEndMins;
-      const isActive = isMinutesInRange(timeInfo.phtMins, sMins, eMins);
-      return { ...row, isActive };
+      const alignment = evaluateWindowAlignment(timeInfo.phtMins, sMins, eMins);
+      return {
+        ...row,
+        isActive: alignment.isAligned,
+        remainingMins: alignment.remainingMins,
+        progressPct: alignment.progressPct,
+        minsUntilStart: alignment.minsUntilStart
+      };
     });
   }, [timeInfo.phtMins, dstMode]);
 
@@ -166,33 +229,56 @@ export function SniperSchedulePanel() {
   return (
     <div
       data-rbac-ui="true"
-      className="w-full bg-[#090d1a]/95 border border-cyan-500/40 rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.14)] overflow-hidden text-xs"
+      className={
+        'w-full rounded-2xl overflow-hidden text-xs transition-all duration-300 border ' +
+        (activeCount > 0
+          ? 'bg-[#071118]/95 border-emerald-500/60 shadow-[0_0_40px_rgba(16,185,129,0.22)]'
+          : 'bg-[#090d1a]/95 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.5)]')
+      }
     >
       {/* HEADER */}
-      <div className="bg-gradient-to-r from-[#0b1329] to-[#090d1a] px-3.5 py-3 border-b border-slate-800 flex items-center justify-between gap-2">
+      <div
+        className={
+          'px-3.5 py-3 border-b flex items-center justify-between gap-2 ' +
+          (activeCount > 0
+            ? 'bg-gradient-to-r from-emerald-950/60 via-[#0b1726] to-[#090d1a] border-emerald-500/40'
+            : 'bg-gradient-to-r from-[#0b1329] to-[#090d1a] border-slate-800')
+        }
+      >
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300">
+          <div
+            className={
+              'p-1.5 rounded-xl border ' +
+              (activeCount > 0
+                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                : 'bg-slate-800/80 border-slate-700 text-slate-400')
+            }
+          >
             <Crosshair className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h3 className="text-xs font-extrabold text-white">Master Schedule: 5M Setup Windows</h3>
+              <h3 className="text-xs font-extrabold text-white">
+                Master Schedule: 5M Setup Windows
+              </h3>
               {activeCount > 0 ? (
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
-                  ● {activeCount} LIVE
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.7)] animate-pulse">
+                  ● {activeCount} ALIGNED NOW
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400">
-                  STANDBY
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                  ○ NO WINDOW ALIGNED
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-cyan-300 font-mono mt-0.5 flex items-center gap-2">
-              <span>PHT: {timeInfo.phtStr}</span>
-              <span>•</span>
-              <span>UTC: {timeInfo.utcStr}</span>
-              <span>•</span>
-              <span>NY: {timeInfo.nyStr}</span>
+            <div className="text-[10px] font-mono mt-0.5 flex items-center gap-2">
+              <span className={activeCount > 0 ? 'text-emerald-300 font-bold' : 'text-cyan-300 font-bold'}>
+                PHT: {timeInfo.phtStr}
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-300">UTC: {timeInfo.utcStr}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-300">NY: {timeInfo.nyStr}</span>
             </div>
           </div>
         </div>
@@ -218,7 +304,7 @@ export function SniperSchedulePanel() {
                   onClick={() => setAssetFilter(f)}
                   className={
                     'px-2 py-0.5 rounded font-bold transition ' +
-                    (assetFilter === f ? 'bg-cyan-500 text-slate-950' : 'text-slate-400')
+                    (assetFilter === f ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white')
                   }
                 >
                   {f}
@@ -231,67 +317,156 @@ export function SniperSchedulePanel() {
                 type="button"
                 onClick={() => setDstMode('SUMMER')}
                 className={
-                  'px-1.5 py-0.5 rounded font-bold ' +
-                  (dstMode === 'SUMMER' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500')
+                  'px-1.5 py-0.5 rounded font-bold transition ' +
+                  (dstMode === 'SUMMER'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'text-slate-500 hover:text-slate-300')
                 }
               >
-                Summer
+                Summer (EDT)
               </button>
               <button
                 type="button"
                 onClick={() => setDstMode('WINTER')}
                 className={
-                  'px-1.5 py-0.5 rounded font-bold ' +
-                  (dstMode === 'Winter' || dstMode === 'WINTER' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-500')
+                  'px-1.5 py-0.5 rounded font-bold transition ' +
+                  (dstMode === 'WINTER'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'text-slate-500 hover:text-slate-300')
                 }
               >
-                Winter
+                Winter (EST)
               </button>
             </div>
           </div>
 
-          {/* LIST */}
-          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-            {filteredRows.map((row) => (
-              <div
-                key={row.id}
-                className={
-                  'bg-[#060a15] border rounded-xl p-2.5 space-y-1 transition ' +
-                  (row.isActive ? 'border-emerald-500/70 bg-emerald-950/25' : 'border-slate-800/80')
-                }
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-white text-xs">{row.assetClass}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[9px]">
-                      {row.tickers}
-                    </span>
+          {/* Legend */}
+          <div className="flex items-center justify-between px-1 text-[10px]">
+            <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+              Green = Time Frame Aligned
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-slate-500 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-slate-600" />
+              Greyed-Out = Off-Hours
+            </span>
+          </div>
+
+          {/* WINDOWS LIST */}
+          <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
+            {filteredRows.map((row) => {
+              const aligned = row.isActive;
+              return (
+                <div
+                  key={row.id}
+                  className={
+                    'rounded-xl p-3 space-y-2 transition-all duration-300 ' +
+                    (aligned
+                      ? 'bg-gradient-to-br from-emerald-950/80 via-[#07211c] to-[#061514] border-2 border-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.35)] scale-[1.01]'
+                      : 'bg-[#060913]/50 border border-slate-800/50 opacity-40 grayscale hover:opacity-75 hover:grayscale-0')
+                  }
+                >
+                  {/* Top Row: Asset & Alignment Badge */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          'font-extrabold text-xs ' +
+                          (aligned ? 'text-white' : 'text-slate-400')
+                        }
+                      >
+                        {row.assetClass}
+                      </span>
+                      <span
+                        className={
+                          'px-1.5 py-0.5 rounded font-mono text-[9px] font-bold border ' +
+                          (aligned
+                            ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50'
+                            : 'bg-slate-900 text-slate-500 border-slate-800')
+                        }
+                      >
+                        {row.tickers}
+                      </span>
+                    </div>
+
+                    {aligned ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-extrabold text-[9px] shadow-[0_0_12px_rgba(52,211,153,0.6)]">
+                        <CheckCircle2 className="w-3 h-3 stroke-[2.5]" />
+                        <span>ALIGNED • {formatDuration(row.remainingMins)} LEFT</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-500 border border-slate-700/60 font-semibold text-[9px]">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>Starts in {formatDuration(row.minsUntilStart)}</span>
+                      </span>
+                    )}
                   </div>
-                  {row.isActive && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-extrabold text-[9px]">
-                      LIVE NOW
-                    </span>
+
+                  {/* Window Title */}
+                  <div
+                    className={
+                      'font-extrabold text-[11px] ' +
+                      (aligned ? 'text-emerald-300' : 'text-slate-500')
+                    }
+                  >
+                    {row.windowName}
+                  </div>
+
+                  {/* Active Progress Bar when Aligned */}
+                  {aligned && (
+                    <div className="w-full h-1.5 bg-emerald-950 rounded-full overflow-hidden border border-emerald-500/40">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-400 to-cyan-300 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, row.progressPct)}%` }}
+                      />
+                    </div>
                   )}
-                </div>
 
-                <div className="font-bold text-slate-200 text-[11px]">{row.windowName}</div>
-
-                <div className="grid grid-cols-2 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/60">
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">PHT (UTC+8)</span>
-                    <strong className="text-emerald-300">
-                      {dstMode === 'SUMMER' ? row.phtSummer : row.phtWinter}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">UTC</span>
-                    <strong className="text-amber-300">
-                      {dstMode === 'SUMMER' ? row.utcSummer : row.utcWinter}
-                    </strong>
+                  {/* Timezone Breakdown */}
+                  <div
+                    className={
+                      'grid grid-cols-2 gap-2 text-[10px] font-mono pt-1.5 border-t ' +
+                      (aligned ? 'border-emerald-500/30' : 'border-slate-800/50')
+                    }
+                  >
+                    <div>
+                      <span
+                        className={
+                          'block text-[9px] ' +
+                          (aligned ? 'text-emerald-200/80' : 'text-slate-600')
+                        }
+                      >
+                        PHT (UTC+8)
+                      </span>
+                      <strong
+                        className={
+                          aligned ? 'text-emerald-300 font-extrabold' : 'text-slate-500 font-normal'
+                        }
+                      >
+                        {dstMode === 'SUMMER' ? row.phtSummer : row.phtWinter}
+                      </strong>
+                    </div>
+                    <div>
+                      <span
+                        className={
+                          'block text-[9px] ' +
+                          (aligned ? 'text-emerald-200/80' : 'text-slate-600')
+                        }
+                      >
+                        UTC / NY
+                      </span>
+                      <strong
+                        className={
+                          aligned ? 'text-white font-bold' : 'text-slate-500 font-normal'
+                        }
+                      >
+                        {dstMode === 'SUMMER' ? row.utcSummer : row.utcWinter} UTC
+                      </strong>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
