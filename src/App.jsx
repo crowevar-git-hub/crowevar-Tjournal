@@ -23,7 +23,7 @@ const STAGE_KEY_MAP = {
   'Stage 1': 'stage1',
   'Stage 2': 'stage2',
   'Funded Account': 'funded',
-  'Live Personal': 'live'
+  'Live Personal': 'live', 'Demo Account': 'demo'
 };
 
 const DEFAULT_ACCOUNT_META = {
@@ -221,7 +221,7 @@ const TRASH_KEY = 'crowevar_trash_master';
 
 const sanitizeTrade = (t, idx = 0) => {
   if (!t || typeof t !== 'object') return INITIAL_TRADES[0];
-  const stage = ['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal'].includes(t.stage) ? t.stage : 'Stage 2';
+  const stage = ['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal', 'Demo Account'].includes(t.stage) ? t.stage : 'Stage 2';
   const acct = String(t.accountNumber || (stage === 'Stage 1' ? '670281' : stage === 'Stage 2' ? '688964' : '6004822'));
   const ticket = String(t.ticketId || t.id || `TRD-${idx + 1}`);
   const sym = String(t.symbol || 'XAUUSD').toUpperCase();
@@ -609,7 +609,8 @@ function JournalDashboard() {
       setTrades,
       activeContext,
       setActiveContext,
-      profiles
+      profiles,
+      setProfiles
     };
     window.dispatchEvent(new CustomEvent('tradeatlas-state-sync', { detail: window.__TRADEATLAS_STATE__ }));
   }, [trades, activeContext, profiles]);
@@ -1922,7 +1923,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     <option value="UNIFIED::ALL" className="bg-[#0d1326]">
                       Unified View — All Accounts Combined
                     </option>
-                    {['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal'].map((stg) => (
+                    {['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal', 'Demo Account'].map((stg) => (
                       <optgroup
                         key={stg}
                         label={stg}
@@ -2826,7 +2827,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
             <form onSubmit={handleSaveAndAnalyzeTrade} className="space-y-5">
               {/* 1. Stage & Account */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal'].map((stg) => (
+                {['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal', 'Demo Account'].map((stg) => (
                   <div
                     key={stg}
                     onClick={() => setEditingTrade({ ...editingTrade, stage: stg, accountNumber: getStageAccountsList(stg)[0] || editingTrade.accountNumber })}

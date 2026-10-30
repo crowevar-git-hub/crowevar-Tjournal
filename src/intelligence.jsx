@@ -319,7 +319,8 @@ function TradeAtlasIntelligenceInner() {
     'Stage 1': 'stage1',
     'Stage 2': 'stage2',
     'Funded Account': 'funded',
-    'Live Personal': 'live'
+    'Live Personal': 'live',
+    'Demo Account': 'demo'
   };
   const currentStageKey = stageKeyMap[activeContext] || null;
 

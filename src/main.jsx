@@ -6,6 +6,7 @@ import { RBACSecurityProvider } from './rbac.jsx'
 import { SniperSchedulePanel } from './sniperSchedule.jsx'
 import { ForexFactoryCalendarPanel } from './forexFactoryCalendar.jsx'
 import { TradeAtlasIntelligenceSuite } from './intelligence.jsx'
+import { DemoAccountSuite } from './demoAccountPanel.jsx'
 
 function MainLayout() {
   return (
@@ -15,6 +16,7 @@ function MainLayout() {
         <div className="max-w-[1560px] mx-auto w-full px-3 sm:px-6 py-4 grid grid-cols-1 xl:grid-cols-[1fr_370px] gap-6 items-start">
           <div className="min-w-0 space-y-6">
             <App />
+            <DemoAccountSuite />
             <TradeAtlasIntelligenceSuite />
           </div>
           <div className="xl:sticky xl:top-16 space-y-4">
