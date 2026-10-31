@@ -2818,7 +2818,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
       {/* LOG TRADE / EDIT TRADE MODAL */}
       {tradeModalOpen && editingTrade && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#090d1a] border border-cyan-500/50 rounded-3xl max-w-4xl w-full p-6 space-y-5 my-6 max-h-[92vh] overflow-y-auto text-xs">
+          <div className="bg-[#090d1a] border border-cyan-500/50 rounded-3xl max-w-5xl w-full p-6 space-y-5 my-6 max-h-[92vh] overflow-y-auto text-xs">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-extrabold text-white">{isNewTrade ? 'Log Professional Trade Execution' : `Edit Execution #${editingTrade.ticketId}`}</h3>
               <button onClick={() => setTradeModalOpen(false)} className="p-2 rounded-xl bg-slate-800 text-slate-400"><X className="w-4 h-4" /></button>
@@ -2880,25 +2880,642 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               {/* 4. Pre-Trade Analysis */}
               <div className="bg-[#0b1326] border border-cyan-500/35 rounded-2xl p-4 space-y-2">
                 <h4 className="font-bold text-cyan-300 uppercase">1. PRE-TRADE ANALYSIS (BEFORE TRADE)</h4>
-                <textarea
-                  rows={3}
-                  value={getPreTradeText(editingTrade)}
-                  onChange={(e) => setEditingTrade({ ...editingTrade, preAnalysis: e.target.value, preTradeAnalysis: { ...(editingTrade.preTradeAnalysis || {}), tradePlan: e.target.value } })}
-                  placeholder="Trade setup & reasoning, confluence factors, entry criteria, market structure & bias, risk assessment & trade plan..."
-                  className="w-full bg-[#070b16] border border-cyan-500/40 rounded-xl p-3 text-white"
-                />
+                {(() => {
+                  const preObj =
+                    typeof editingTrade.preTradeAnalysis === 'object' && editingTrade.preTradeAnalysis !== null
+                      ? editingTrade.preTradeAnalysis
+                      : {};
+                  const preTechText =
+                    preObj.technicalNotes !== undefined
+                      ? preObj.technicalNotes
+                      : typeof editingTrade.preTradeAnalysis === 'string'
+                      ? editingTrade.preTradeAnalysis
+                      : preObj.tradePlan ?? editingTrade.preAnalysis ?? '';
+                  const preBehavText = preObj.behavioralNotes ?? '';
+
+                  const confRating = Number(preObj.confidenceLevel ?? editingTrade.confidenceLevel ?? 8);
+                  const patRating = Number(preObj.patienceLevel ?? 8);
+                  const stressRating = Number(preObj.stressLevel ?? editingTrade.stressLevel ?? 2);
+                  const fearRating = Number(preObj.fearLevel ?? 2);
+
+                  const followingPlan = preObj.followingPlan !== undefined ? Boolean(preObj.followingPlan) : true;
+                  const fomoPresent = preObj.fomoPresent !== undefined ? Boolean(preObj.fomoPresent) : false;
+                  const revengePresent = preObj.revengePresent !== undefined ? Boolean(preObj.revengePresent) : false;
+                  const urgeToForce = preObj.urgeToForce !== undefined ? Boolean(preObj.urgeToForce) : false;
+
+                  const updatePreField = (patch) => {
+                    const nextPreObj = {
+                      ...preObj,
+                      technicalNotes: preTechText,
+                      behavioralNotes: preBehavText,
+                      confidenceLevel: confRating,
+                      patienceLevel: patRating,
+                      stressLevel: stressRating,
+                      fearLevel: fearRating,
+                      followingPlan,
+                      fomoPresent,
+                      revengePresent,
+                      urgeToForce,
+                      ...patch
+                    };
+                    const combinedSummary = nextPreObj.technicalNotes
+                      ? nextPreObj.behavioralNotes
+                        ? `[TECH] ${nextPreObj.technicalNotes} | [MINDSET] ${nextPreObj.behavioralNotes}`
+                        : nextPreObj.technicalNotes
+                      : nextPreObj.behavioralNotes || '';
+
+                    setEditingTrade({
+                      ...editingTrade,
+                      confidenceLevel: nextPreObj.confidenceLevel,
+                      stressLevel: nextPreObj.stressLevel,
+                      followedPlan: nextPreObj.followingPlan,
+                      preAnalysis: nextPreObj.technicalNotes || combinedSummary,
+                      preTradeAnalysis: {
+                        ...nextPreObj,
+                        tradePlan: nextPreObj.technicalNotes || combinedSummary,
+                        setup: preObj.setup || (nextPreObj.technicalNotes || '').slice(0, 60)
+                      }
+                    });
+                  };
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                      {/* LEFT PANEL: TECHNICAL NOTES */}
+                      <div className="bg-[#070b16] border border-cyan-500/35 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-cyan-300 uppercase tracking-wide block">
+                                Left Panel: Technical Notes
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Strategy, Setup, Market Structure, Liquidity &amp; Risk Logic
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold">
+                              Technical Edge
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1 text-[9px] text-slate-400">
+                            {[
+                              'HTF Bias & Structure',
+                              'Liquidity Zones & S/R',
+                              'Entry Model & Confluence',
+                              'R:R, SL & Target Logic',
+                              'Invalidation Level'
+                            ].map((hint) => (
+                              <span
+                                key={hint}
+                                onClick={() => {
+                                  const prefix = preTechText ? `${preTechText}\n• ${hint}: ` : `• ${hint}: `;
+                                  updatePreField({ technicalNotes: prefix });
+                                }}
+                                className="px-2 py-0.5 rounded bg-[#0b1326] hover:bg-cyan-950/60 border border-slate-800 hover:border-cyan-500/40 text-cyan-200 cursor-pointer transition"
+                                title="Click to insert prompt bullet"
+                              >
+                                + {hint}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <textarea
+                          rows={7}
+                          value={preTechText}
+                          onChange={(e) => updatePreField({ technicalNotes: e.target.value })}
+                          placeholder={
+                            'Document WHY this trade has an edge:\n• Market structure, trend direction & HTF bias\n• Key S/R & liquidity sweep zones\n• Entry model, confluences & R:R assessment\n• Stop-loss logic, target logic & invalidation conditions...'
+                          }
+                          className="w-full bg-[#050811] border border-cyan-500/35 focus:border-cyan-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
+                        />
+                      </div>
+
+                      {/* RIGHT PANEL: BEHAVIORAL NOTES */}
+                      <div className="bg-[#070b16] border border-amber-500/35 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-amber-300 uppercase tracking-wide block">
+                                Right Panel: Behavioral Notes
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Psychology, Emotions, Biometrics &amp; Decision Quality
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                              Mindset Audit
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2.5 bg-[#0b1122] border border-slate-800/90 rounded-xl p-2.5 text-[10px]">
+                            <div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-300 font-semibold">Confidence</span>
+                                <strong className="text-cyan-300 font-mono">{confRating}/10</strong>
+                              </div>
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                value={confRating}
+                                onChange={(e) => updatePreField({ confidenceLevel: Number(e.target.value) })}
+                                className="w-full accent-cyan-400 cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-300 font-semibold">Patience</span>
+                                <strong className="text-emerald-300 font-mono">{patRating}/10</strong>
+                              </div>
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                value={patRating}
+                                onChange={(e) => updatePreField({ patienceLevel: Number(e.target.value) })}
+                                className="w-full accent-emerald-400 cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-300 font-semibold">Stress Level</span>
+                                <strong className={stressRating >= 7 ? 'text-rose-400 font-mono' : 'text-amber-300 font-mono'}>
+                                  {stressRating}/10
+                                </strong>
+                              </div>
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                value={stressRating}
+                                onChange={(e) => updatePreField({ stressLevel: Number(e.target.value) })}
+                                className="w-full accent-amber-400 cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-300 font-semibold">Fear Level</span>
+                                <strong className={fearRating >= 7 ? 'text-rose-400 font-mono' : 'text-amber-300 font-mono'}>
+                                  {fearRating}/10
+                                </strong>
+                              </div>
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                value={fearRating}
+                                onChange={(e) => updatePreField({ fearLevel: Number(e.target.value) })}
+                                className="w-full accent-rose-400 cursor-pointer"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                            <button
+                              type="button"
+                              onClick={() => updatePreField({ followingPlan: !followingPlan })}
+                              className={
+                                'px-2.5 py-1.5 rounded-lg font-bold border text-left flex items-center justify-between transition ' +
+                                (followingPlan
+                                  ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
+                                  : 'bg-rose-950/40 border-rose-500/50 text-rose-300')
+                              }
+                            >
+                              <span>Following Plan?</span>
+                              <span>{followingPlan ? 'YES ✓' : 'NO ✕'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => updatePreField({ fomoPresent: !fomoPresent })}
+                              className={
+                                'px-2.5 py-1.5 rounded-lg font-bold border text-left flex items-center justify-between transition ' +
+                                (fomoPresent
+                                  ? 'bg-rose-950/50 border-rose-500 text-rose-300'
+                                  : 'bg-[#0b1122] border-slate-800 text-slate-400')
+                              }
+                            >
+                              <span>FOMO Present?</span>
+                              <span>{fomoPresent ? 'YES ⚠️' : 'NO'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => updatePreField({ revengePresent: !revengePresent })}
+                              className={
+                                'px-2.5 py-1.5 rounded-lg font-bold border text-left flex items-center justify-between transition ' +
+                                (revengePresent
+                                  ? 'bg-rose-950/50 border-rose-500 text-rose-300'
+                                  : 'bg-[#0b1122] border-slate-800 text-slate-400')
+                              }
+                            >
+                              <span>Revenge Trade?</span>
+                              <span>{revengePresent ? 'YES ⚠️' : 'NO'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => updatePreField({ urgeToForce: !urgeToForce })}
+                              className={
+                                'px-2.5 py-1.5 rounded-lg font-bold border text-left flex items-center justify-between transition ' +
+                                (urgeToForce
+                                  ? 'bg-rose-950/50 border-rose-500 text-rose-300'
+                                  : 'bg-[#0b1122] border-slate-800 text-slate-400')
+                              }
+                            >
+                              <span>Forcing Trade?</span>
+                              <span>{urgeToForce ? 'YES ⚠️' : 'NO'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <textarea
+                          rows={4}
+                          value={preBehavText}
+                          onChange={(e) => updatePreField({ behavioralNotes: e.target.value })}
+                          placeholder={
+                            'Describe what you are thinking & feeling before entry:\n• Current emotional state, mental clarity & focus\n• Any urge to force a trade or external influences?'
+                          }
+                          className="w-full bg-[#050811] border border-amber-500/35 focus:border-amber-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 5. Post-Trade Review */}
               <div className="bg-[#0f1329] border border-indigo-500/35 rounded-2xl p-4 space-y-2">
                 <h4 className="font-bold text-indigo-300 uppercase">2. POST-TRADE REVIEW (AFTER TRADE)</h4>
-                <textarea
-                  rows={3}
-                  value={getPostTradeText(editingTrade)}
-                  onChange={(e) => setEditingTrade({ ...editingTrade, postAnalysis: e.target.value, postTradeReview: { ...(editingTrade.postTradeReview || {}), outcomeAnalysis: e.target.value } })}
-                  placeholder="Trade outcome & execution analysis, what worked well, mistakes or deviations from the plan, lessons learned, improvement actions..."
-                  className="w-full bg-[#070b16] border border-indigo-500/40 rounded-xl p-3 text-white"
-                />
+                {(() => {
+                  const postObj =
+                    typeof editingTrade.postTradeReview === 'object' && editingTrade.postTradeReview !== null
+                      ? editingTrade.postTradeReview
+                      : {};
+                  const postTechText =
+                    postObj.technicalNotes !== undefined
+                      ? postObj.technicalNotes
+                      : typeof editingTrade.postTradeReview === 'string'
+                      ? editingTrade.postTradeReview
+                      : postObj.outcomeAnalysis ?? editingTrade.postAnalysis ?? '';
+                  const postBehavText = postObj.behavioralNotes ?? '';
+
+                  const setupQuality = Number(postObj.setupQualityRating ?? 8);
+                  const execRating = Number(postObj.executionRating ?? 8);
+                  const riskRating = Number(postObj.riskManagementRating ?? 9);
+
+                  const validSetup = postObj.validSetup !== undefined ? Boolean(postObj.validSetup) : true;
+                  const entryPerPlan = postObj.entryPerPlan !== undefined ? Boolean(postObj.entryPerPlan) : true;
+                  const sizingCorrect = postObj.sizingCorrect !== undefined ? Boolean(postObj.sizingCorrect) : true;
+                  const slRespected = postObj.slRespected !== undefined ? Boolean(postObj.slRespected) : true;
+                  const tpRespected = postObj.tpRespected !== undefined ? Boolean(postObj.tpRespected) : true;
+
+                  const discRating = Number(postObj.disciplineRating ?? 9);
+                  const emoControlRating = Number(postObj.emotionalControlRating ?? 8);
+                  const postPatienceRating = Number(postObj.patienceRating ?? 8);
+                  const biases = Array.isArray(postObj.cognitiveBiases)
+                    ? postObj.cognitiveBiases
+                    : Array.isArray(editingTrade.mistakes)
+                    ? editingTrade.mistakes
+                    : [];
+
+                  const updatePostField = (patch) => {
+                    const nextPostObj = {
+                      ...postObj,
+                      technicalNotes: postTechText,
+                      behavioralNotes: postBehavText,
+                      setupQualityRating: setupQuality,
+                      executionRating: execRating,
+                      riskManagementRating: riskRating,
+                      validSetup,
+                      entryPerPlan,
+                      sizingCorrect,
+                      slRespected,
+                      tpRespected,
+                      disciplineRating: discRating,
+                      emotionalControlRating: emoControlRating,
+                      patienceRating: postPatienceRating,
+                      cognitiveBiases: biases,
+                      ...patch
+                    };
+
+                    const combinedPost = nextPostObj.technicalNotes
+                      ? nextPostObj.behavioralNotes
+                        ? `[TECH REVIEW] ${nextPostObj.technicalNotes} | [BEHAVIORAL] ${nextPostObj.behavioralNotes}`
+                        : nextPostObj.technicalNotes
+                      : nextPostObj.behavioralNotes || '';
+
+                    setEditingTrade({
+                      ...editingTrade,
+                      mistakes: nextPostObj.cognitiveBiases,
+                      postAnalysis: nextPostObj.technicalNotes || combinedPost,
+                      postTradeReview: {
+                        ...nextPostObj,
+                        outcomeAnalysis: nextPostObj.technicalNotes || combinedPost
+                      }
+                    });
+                  };
+
+                  const preObjRef =
+                    typeof editingTrade.preTradeAnalysis === 'object' && editingTrade.preTradeAnalysis !== null
+                      ? editingTrade.preTradeAnalysis
+                      : {};
+                  const checkCount = [validSetup, entryPerPlan, sizingCorrect, slRespected, tpRespected].filter(Boolean).length;
+                  const techScore = Math.min(
+                    100,
+                    Math.max(20, Math.round(((setupQuality + execRating) / 20) * 65 + (checkCount / 5) * 35))
+                  );
+                  const biasPenalty =
+                    biases.length * 12 +
+                    (preObjRef.fomoPresent ? 10 : 0) +
+                    (preObjRef.revengePresent ? 15 : 0);
+                  const behavScore = Math.min(
+                    100,
+                    Math.max(15, Math.round(((discRating + emoControlRating + postPatienceRating) / 30) * 100 - biasPenalty))
+                  );
+                  const riskScore = Math.min(
+                    100,
+                    Math.max(20, Math.round((riskRating / 10) * 60 + (sizingCorrect ? 20 : 0) + (slRespected ? 20 : 0)))
+                  );
+                  const processScore = Math.round(techScore * 0.35 + behavScore * 0.35 + riskScore * 0.3);
+
+                  const overallGrade =
+                    processScore >= 92
+                      ? 'A+'
+                      : processScore >= 85
+                      ? 'A'
+                      : processScore >= 75
+                      ? 'B'
+                      : processScore >= 65
+                      ? 'C'
+                      : processScore >= 50
+                      ? 'D'
+                      : 'F';
+
+                  const isRuleBrokenWin = editingTrade.status === 'W' && processScore < 70;
+                  const isGoodProcessLoss = editingTrade.status === 'L' && processScore >= 80;
+
+                  return (
+                    <div className="space-y-4 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* LEFT PANEL: TECHNICAL REVIEW */}
+                        <div className="bg-[#070b16] border border-indigo-500/35 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                              <div>
+                                <span className="text-xs font-extrabold text-indigo-300 uppercase tracking-wide block">
+                                  Left Panel: Technical Notes
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  Setup Validity, Plan Execution, Sizing &amp; Market Behavior
+                                </span>
+                              </div>
+                              <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                                Tech: {techScore}/100
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 bg-[#0b1122] border border-slate-800/90 rounded-xl p-2.5 text-[10px]">
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Setup</span>
+                                  <strong className="text-cyan-300 font-mono">{setupQuality}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={setupQuality}
+                                  onChange={(e) => updatePostField({ setupQualityRating: Number(e.target.value) })}
+                                  className="w-full accent-cyan-400 cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Execution</span>
+                                  <strong className="text-indigo-300 font-mono">{execRating}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={execRating}
+                                  onChange={(e) => updatePostField({ executionRating: Number(e.target.value) })}
+                                  className="w-full accent-indigo-400 cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Risk Mgmt</span>
+                                  <strong className="text-emerald-300 font-mono">{riskRating}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={riskRating}
+                                  onChange={(e) => updatePostField({ riskManagementRating: Number(e.target.value) })}
+                                  className="w-full accent-emerald-400 cursor-pointer"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5 text-[10px]">
+                              {[
+                                { key: 'validSetup', label: 'Valid Setup', val: validSetup },
+                                { key: 'entryPerPlan', label: 'Entry Per Plan', val: entryPerPlan },
+                                { key: 'sizingCorrect', label: 'Sizing Correct', val: sizingCorrect },
+                                { key: 'slRespected', label: 'SL Respected', val: slRespected },
+                                { key: 'tpRespected', label: 'Targets Respected', val: tpRespected }
+                              ].map((chk) => (
+                                <button
+                                  key={chk.key}
+                                  type="button"
+                                  onClick={() => updatePostField({ [chk.key]: !chk.val })}
+                                  className={
+                                    'px-2 py-1 rounded-lg font-bold border transition ' +
+                                    (chk.val
+                                      ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
+                                      : 'bg-rose-950/40 border-rose-500/50 text-rose-300')
+                                  }
+                                >
+                                  {chk.val ? '☑ ' : '☐ '}
+                                  {chk.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <textarea
+                            rows={5}
+                            value={postTechText}
+                            onChange={(e) => updatePostField({ technicalNotes: e.target.value })}
+                            placeholder={
+                              'Technical execution & outcome review:\n• Market behavior vs. expected behavior\n• What worked well technically & what was missed?\n• Lessons learned & technical adjustments for future setups...'
+                            }
+                            className="w-full bg-[#050811] border border-indigo-500/35 focus:border-indigo-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
+                          />
+                        </div>
+
+                        {/* RIGHT PANEL: BEHAVIORAL REVIEW */}
+                        <div className="bg-[#070b16] border border-rose-500/35 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                              <div>
+                                <span className="text-xs font-extrabold text-rose-300 uppercase tracking-wide block">
+                                  Right Panel: Behavioral Notes
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  Emotional Control, Rule Compliance &amp; Cognitive Biases
+                                </span>
+                              </div>
+                              <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
+                                Discipline: {behavScore}/100
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 bg-[#0b1122] border border-slate-800/90 rounded-xl p-2.5 text-[10px]">
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Discipline</span>
+                                  <strong className="text-emerald-300 font-mono">{discRating}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={discRating}
+                                  onChange={(e) => updatePostField({ disciplineRating: Number(e.target.value) })}
+                                  className="w-full accent-emerald-400 cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Emo Control</span>
+                                  <strong className="text-cyan-300 font-mono">{emoControlRating}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={emoControlRating}
+                                  onChange={(e) => updatePostField({ emotionalControlRating: Number(e.target.value) })}
+                                  className="w-full accent-cyan-400 cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-300">Patience</span>
+                                  <strong className="text-amber-300 font-mono">{postPatienceRating}/10</strong>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={postPatienceRating}
+                                  onChange={(e) => updatePostField({ patienceRating: Number(e.target.value) })}
+                                  className="w-full accent-amber-400 cursor-pointer"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1 text-[10px]">
+                              {[
+                                'FOMO',
+                                'Revenge Trading',
+                                'Overconfidence',
+                                'Confirmation Bias',
+                                'Loss Aversion',
+                                'Impatience',
+                                'Rule Breaking',
+                                'Moved SL/TP Emotionally',
+                                'Exited Early',
+                                'Held Too Long'
+                              ].map((bTag) => {
+                                const active = biases.includes(bTag);
+                                return (
+                                  <button
+                                    key={bTag}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = active
+                                        ? biases.filter((x) => x !== bTag)
+                                        : [...biases, bTag];
+                                      updatePostField({ cognitiveBiases: next });
+                                    }}
+                                    className={
+                                      'px-2 py-0.5 rounded-lg font-bold border transition ' +
+                                      (active
+                                        ? 'bg-rose-600/30 border-rose-400 text-rose-200'
+                                        : 'bg-[#0b1122] border-slate-800 text-slate-400 hover:text-white')
+                                    }
+                                  >
+                                    {active ? '⚠️ ' : '+ '}
+                                    {bTag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <textarea
+                            rows={5}
+                            value={postBehavText}
+                            onChange={(e) => updatePostField({ behavioralNotes: e.target.value })}
+                            placeholder={
+                              'Review psychological performance during the trade:\n• Did emotions influence stop-loss, targets, early exit, or hesitation?\n• Cognitive biases, emotional triggers, or discipline observations...'
+                            }
+                            className="w-full bg-[#050811] border border-rose-500/35 focus:border-rose-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* LIVE AI PROCESS-QUALITY SCORECARD */}
+                      <div className="bg-gradient-to-r from-[#070b16] via-[#0b1428] to-[#070b16] border border-cyan-500/40 rounded-xl p-3.5 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-extrabold text-xs">
+                              AI Process Grade: {overallGrade} ({processScore}/100)
+                            </span>
+                            {isGoodProcessLoss && (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[11px]">
+                                ✓ Successful Process Trade (Followed Plan Despite Loss)
+                              </span>
+                            )}
+                            {isRuleBrokenWin && (
+                              <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-[11px]">
+                                ⚠️ Failed Process Trade (Profitable Outcome, Broken Process Rules)
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 italic">
+                            Judged strictly on process quality &amp; discipline, not P&amp;L.
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                          <div className="bg-[#0b1122] border border-slate-800 rounded-lg px-2.5 py-1.5 flex justify-between">
+                            <span className="text-slate-400">1. Tech Execution:</span>
+                            <strong className="text-cyan-300 font-mono">{techScore}/100</strong>
+                          </div>
+                          <div className="bg-[#0b1122] border border-slate-800 rounded-lg px-2.5 py-1.5 flex justify-between">
+                            <span className="text-slate-400">2. Behavioral Disc:</span>
+                            <strong className="text-emerald-300 font-mono">{behavScore}/100</strong>
+                          </div>
+                          <div className="bg-[#0b1122] border border-slate-800 rounded-lg px-2.5 py-1.5 flex justify-between">
+                            <span className="text-slate-400">3. Risk Mgmt:</span>
+                            <strong className="text-indigo-300 font-mono">{riskScore}/100</strong>
+                          </div>
+                          <div className="bg-[#0b1122] border border-slate-800 rounded-lg px-2.5 py-1.5 flex justify-between">
+                            <span className="text-slate-400">4. Process Score:</span>
+                            <strong className="text-amber-300 font-mono">{processScore}/100</strong>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 6. Screenshot Attachments */}
