@@ -105,67 +105,184 @@ const evaluateTradeWithAICoach = (t) => {
   const prof = Number(t?.profit) || 0;
   const loss = Number(t?.loss) || 0;
   const net = prof - loss;
-  const mistakes = resolveTradeMistakes(t);
-  const preText = String(t?.preTradeAnalysis?.tradePlan || t?.preAnalysis || '').trim();
-  const postText = String(t?.postTradeReview?.outcomeAnalysis || t?.postAnalysis || '').trim();
-  const hasScreenshots = Array.isArray(t?.screenshots) && t.screenshots.length > 0;
-  const confidence = Number(t?.confidenceLevel ?? 8);
-  const stress = Number(t?.stressLevel ?? 3);
-  const followedPlan = t?.followedPlan !== undefined ? Boolean(t.followedPlan) : mistakes.length === 0;
 
-  let score = 78;
-  if (net > 0) score += 10;
-  if (preText.length > 15) score += 5;
-  if (postText.length > 15) score += 4;
-  if (hasScreenshots) score += 4;
-  if (followedPlan) score += 6;
-  if (stress >= 7) score -= 8;
-  score -= mistakes.length * 9;
-  score = Math.max(40, Math.min(99, score));
+  const preObj = typeof t?.preTradeAnalysis === 'object' && t.preTradeAnalysis !== null ? t.preTradeAnalysis : {};
+  const postObj = typeof t?.postTradeReview === 'object' && t.postTradeReview !== null ? t.postTradeReview : {};
 
+  const preTech = String(
+    preObj.technicalNotes ??
+      (typeof t?.preTradeAnalysis === 'string' ? t.preTradeAnalysis : preObj.tradePlan ?? t?.preAnalysis ?? '')
+  ).trim();
+  const preBehav = String(preObj.behavioralNotes ?? '').trim();
+
+  const postTech = String(
+    postObj.technicalNotes ??
+      (typeof t?.postTradeReview === 'string' ? t.postTradeReview : postObj.outcomeAnalysis ?? t?.postAnalysis ?? '')
+  ).trim();
+  const postBehav = String(postObj.behavioralNotes ?? '').trim();
+
+  const mistakes = Array.isArray(postObj.cognitiveBiases) && postObj.cognitiveBiases.length > 0
+    ? postObj.cognitiveBiases
+    : resolveTradeMistakes(t);
+
+  const setupQuality = Number(postObj.setupQualityRating ?? 8);
+  const execRating = Number(postObj.executionRating ?? 8);
+  const riskRating = Number(postObj.riskManagementRating ?? 9);
+
+  const validSetup = postObj.validSetup !== undefined ? Boolean(postObj.validSetup) : true;
+  const entryPerPlan = postObj.entryPerPlan !== undefined ? Boolean(postObj.entryPerPlan) : !mistakes.includes('Early Entry');
+  const sizingCorrect = postObj.sizingCorrect !== undefined ? Boolean(postObj.sizingCorrect) : !mistakes.includes('Position Oversizing');
+  const slRespected = postObj.slRespected !== undefined ? Boolean(postObj.slRespected) : !mistakes.includes('Missed Stop Loss');
+  const tpRespected = postObj.tpRespected !== undefined ? Boolean(postObj.tpRespected) : true;
+
+  const discRating = Number(postObj.disciplineRating ?? 9);
+  const emoControl = Number(postObj.emotionalControlRating ?? 8);
+  const patienceRating = Number(postObj.patienceRating ?? preObj.patienceLevel ?? 8);
+  const stress = Number(preObj.stressLevel ?? t?.stressLevel ?? 3);
+  const followingPlan = preObj.followingPlan !== undefined ? Boolean(preObj.followingPlan) : mistakes.length === 0;
+
+  // 1. Technical Execution Score (0-100)
+  const techChecks = [validSetup, entryPerPlan, tpRespected].filter(Boolean).length;
+  const technicalScore = Math.min(
+    100,
+    Math.max(
+      25,
+      Math.round(((setupQuality + execRating) / 20) * 65 + (techChecks / 3) * 25 + (preTech.length > 15 ? 10 : 0))
+    )
+  );
+
+  // 2. Behavioral Discipline Score (0-100)
+  const biasPenalty =
+    mistakes.length * 12 +
+    (preObj.fomoPresent ? 10 : 0) +
+    (preObj.revengePresent ? 15 : 0) +
+    (preObj.urgeToForce ? 10 : 0) +
+    (stress >= 7 ? 8 : 0);
+  const behavioralScore = Math.min(
+    100,
+    Math.max(15, Math.round(((discRating + emoControl + patienceRating) / 30) * 100 - biasPenalty))
+  );
+
+  // 3. Risk Management Score (0-100)
+  const riskScore = Math.min(
+    100,
+    Math.max(
+      20,
+      Math.round((riskRating / 10) * 60 + (sizingCorrect ? 20 : 0) + (slRespected ? 20 : 0))
+    )
+  );
+
+  // 4. Process Adherence Score (0-100) — Judged on Process Quality, NOT P&L
+  const processScore = Math.min(
+    100,
+    Math.max(
+      20,
+      Math.round(
+        technicalScore * 0.35 +
+          behavioralScore * 0.35 +
+          riskScore * 0.30 +
+          (followingPlan ? 4 : -12)
+      )
+    )
+  );
+
+  // 5. Overall Trade Grade (A+ to F)
   const grade =
-    score >= 93 ? 'A+' : score >= 86 ? 'A' : score >= 80 ? 'B+' : score >= 72 ? 'B' : 'C';
+    processScore >= 92
+      ? 'A+'
+      : processScore >= 85
+      ? 'A'
+      : processScore >= 75
+      ? 'B'
+      : processScore >= 65
+      ? 'C'
+      : processScore >= 50
+      ? 'D'
+      : 'F';
 
-  const strengths = [];
-  if (followedPlan) strengths.push('Followed Risk & Trade Plan');
-  if (preText.length > 15) strengths.push('Documented Pre-Trade Confluence');
-  if (net > 0) strengths.push(`Positive Execution (+$${net.toFixed(2)})`);
-  if (confidence >= 7 && stress <= 5) strengths.push('Composed Psychological State');
-  if (strengths.length === 0) strengths.push('Position Risk Logged in Ledger');
+  const processVerdict =
+    net < 0 && processScore >= 80
+      ? 'Successful Process Trade (Followed Plan Despite Loss)'
+      : net > 0 && processScore < 70
+      ? 'Failed Process Trade (Profitable Outcome, Broken Rules)'
+      : processScore >= 80
+      ? 'High-Quality Process Execution'
+      : 'Process Needs Tightening';
 
-  const weaknesses = [...mistakes];
-  if (!preText) weaknesses.push('Missing Detailed Pre-Trade Plan');
-  if (!hasScreenshots) weaknesses.push('No Chart Evidence Screenshot Attached');
-  if (stress >= 7) weaknesses.push(`Elevated Pre-Trade Stress (${stress}/10)`);
+  const biggestTechStrength = validSetup && entryPerPlan
+    ? `Valid setup executed per plan (Setup ${setupQuality}/10, Execution ${execRating}/10).`
+    : preTech.length > 15
+    ? 'Clear pre-trade technical thesis and structure levels documented.'
+    : 'Position sizing and stop-loss parameters logged.';
+
+  const biggestTechWeakness = !entryPerPlan
+    ? 'Entry timing deviated from the planned setup trigger.'
+    : !slRespected || !tpRespected
+    ? 'Stop-loss or profit target levels were not respected mechanically.'
+    : preTech.length < 10
+    ? 'Incomplete pre-trade technical thesis and invalidation notes.'
+    : 'None — technical execution aligned with plan.';
+
+  const biggestBehavStrength =
+    mistakes.length === 0 && followingPlan
+      ? `Strong emotional control (${emoControl}/10) and patience (${patienceRating}/10) with zero cognitive bias triggers.`
+      : 'Self-awareness maintained during post-trade behavioral reflection.';
+
+  const biggestBehavWeakness =
+    mistakes.length > 0
+      ? `Triggered cognitive bias: ${mistakes.join(', ')}.`
+      : stress >= 7
+      ? `Entered trade with elevated pre-trade stress (${stress}/10).`
+      : 'No major behavioral leaks detected.';
+
+  const keyLesson =
+    net < 0 && processScore >= 80
+      ? 'A losing trade that follows all rules is a winning process trade — keep executing this edge.'
+      : net > 0 && processScore < 70
+      ? 'Do not let a green P&L mask rule-breaking; unaligned wins reinforce bad habits.'
+      : postTech.slice(0, 110) || 'Separating technical thesis from emotional state sharpens execution consistency.';
 
   const recommendation =
-    mistakes.includes('Early Entry')
-      ? 'Wait for candle closure and liquidity sweep confirmation before executing.'
-      : mistakes.includes('FOMO Entry')
-      ? 'Avoid chasing impulsive candles; set limit alerts at HTF key levels.'
-      : net < 0
-      ? 'Review stop-loss placement relative to session liquidity highs/lows.'
-      : 'Maintain current position sizing and continue scaling at 2R+ targets.';
+    mistakes.includes('FOMO') || mistakes.includes('FOMO Entry') || preObj.fomoPresent
+      ? 'Wait for price to pull back into your pre-marked liquidity zone; never chase an expanded 5M candle.'
+      : mistakes.includes('Early Entry')
+      ? 'Require a 5M candle closure confirming displacement before committing capital.'
+      : !preBehav || !postBehav
+      ? 'Complete both the Technical and Behavioral boxes on your next trade to track mindset vs. setup quality.'
+      : 'Continue executing only when Technical Setup >= 8/10 and Pre-Trade Stress <= 4/10.';
 
   return {
-    score,
+    score: processScore,
+    technicalScore,
+    behavioralScore,
+    riskScore,
+    processScore,
     grade,
-    entryQuality: mistakes.includes('Early Entry') || mistakes.includes('Late Entry') ? 'Needs Tuning' : 'Strong',
-    exitQuality: net > 0 ? 'Optimal' : 'Stopped / Defensive',
-    riskManagement: mistakes.includes('Position Oversizing') ? 'Aggressive' : 'Controlled (<= 1% Risk)',
-    discipline: followedPlan ? '95% Compliant' : 'Deviated',
-    strengths,
-    weaknesses,
+    processVerdict,
+    preTech,
+    preBehav,
+    postTech,
+    postBehav,
+    entryQuality: entryPerPlan ? `Strong (${execRating}/10)` : 'Deviated',
+    exitQuality: tpRespected && slRespected ? 'Plan Respected' : 'Emotional Exit',
+    riskManagement: `${riskScore}/100 (Risk ${riskRating}/10)`,
+    discipline: `${behavioralScore}/100 (Disc ${discRating}/10)`,
+    biggestTechStrength,
+    biggestTechWeakness,
+    biggestBehavStrength,
+    biggestBehavWeakness,
+    keyLesson,
+    strengths: [biggestTechStrength, biggestBehavStrength],
+    weaknesses: mistakes.length > 0 ? [biggestBehavWeakness, biggestTechWeakness] : [],
     recommendation,
     checklist: [
-      'Confirm HTF Market Structure & Session Bias',
-      'Wait for Liquidity Sweep + Displacement Candle',
-      'Verify Risk <= 1.0% Before Clicking Buy/Sell',
-      'Attach Entry & Result Chart Screenshots'
+      'Complete Pre-Trade Technical Notes (Structure, Liquidity, Invalidation)',
+      'Complete Pre-Trade Behavioral Audit (Confidence >= 7, Stress <= 4, Zero FOMO)',
+      'Respect Fixed Stop-Loss & Target Logic Without Emotional Interference',
+      'Score Post-Trade Technical & Behavioral Performance Immediately After Close'
     ]
   };
 };
-
 class IntelligenceErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -1538,17 +1655,136 @@ function TradeAtlasIntelligenceInner() {
                       </>
                     )}
 
+                    {drawerTab === 'OVERVIEW' && (
+                      <div className="space-y-3 pt-2">
+                        {/* Side-by-Side Pre-Trade Technical vs Behavioral */}
+                        <div className="bg-[#0b1122] border border-cyan-500/30 rounded-xl p-3 space-y-2">
+                          <span className="text-[11px] font-extrabold text-cyan-300 uppercase block">
+                            1. Pre-Trade Analysis (Technical vs. Behavioral)
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2.5">
+                              <span className="text-[10px] font-bold text-cyan-400 uppercase block mb-1">
+                                Technical Notes
+                              </span>
+                              <p className="text-slate-200 whitespace-pre-wrap text-[11px]">
+                                {ai.preTech || 'No pre-trade technical notes recorded.'}
+                              </p>
+                            </div>
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2.5">
+                              <span className="text-[10px] font-bold text-amber-400 uppercase block mb-1">
+                                Behavioral Notes
+                              </span>
+                              <p className="text-slate-200 whitespace-pre-wrap text-[11px]">
+                                {ai.preBehav || 'No pre-trade behavioral notes recorded.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Side-by-Side Post-Trade Technical vs Behavioral */}
+                        <div className="bg-[#0b1122] border border-indigo-500/30 rounded-xl p-3 space-y-2">
+                          <span className="text-[11px] font-extrabold text-indigo-300 uppercase block">
+                            2. Post-Trade Review (Technical vs. Behavioral)
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2.5">
+                              <span className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">
+                                Technical Review
+                              </span>
+                              <p className="text-slate-200 whitespace-pre-wrap text-[11px]">
+                                {ai.postTech || 'No post-trade technical review recorded.'}
+                              </p>
+                            </div>
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2.5">
+                              <span className="text-[10px] font-bold text-rose-400 uppercase block mb-1">
+                                Behavioral Review
+                              </span>
+                              <p className="text-slate-200 whitespace-pre-wrap text-[11px]">
+                                {ai.postBehav || 'No post-trade behavioral review recorded.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {drawerTab === 'COACH' && (
                       <div className="space-y-3">
-                        <div className="bg-[#0b1122] border border-emerald-500/30 rounded-xl p-3.5 space-y-1">
-                          <h4 className="font-bold text-emerald-300 uppercase text-[11px]">Strengths</h4>
-                          {ai.strengths.map((s, i) => (
-                            <div key={i} className="text-emerald-200">✓ {s}</div>
-                          ))}
+                        {/* 4-Score Process Breakdown + Overall Trade Grade */}
+                        <div className="bg-gradient-to-r from-[#0b1329] to-[#090d1a] border border-cyan-500/40 rounded-xl p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-cyan-300 uppercase block">
+                                PROCESS-FIRST AI EVALUATION
+                              </span>
+                              <strong className="text-lg font-extrabold text-white">
+                                Overall Grade: {ai.grade} ({ai.processScore}/100)
+                              </strong>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-bold text-[10px]">
+                              {ai.processVerdict}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2 flex justify-between">
+                              <span className="text-slate-400">1. Technical Execution:</span>
+                              <strong className="text-cyan-300 font-mono">{ai.technicalScore}/100</strong>
+                            </div>
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2 flex justify-between">
+                              <span className="text-slate-400">2. Behavioral Discipline:</span>
+                              <strong className="text-emerald-300 font-mono">{ai.behavioralScore}/100</strong>
+                            </div>
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2 flex justify-between">
+                              <span className="text-slate-400">3. Risk Management:</span>
+                              <strong className="text-indigo-300 font-mono">{ai.riskScore}/100</strong>
+                            </div>
+                            <div className="bg-[#050811] border border-slate-800 rounded-lg p-2 flex justify-between">
+                              <span className="text-slate-400">4. Process Adherence:</span>
+                              <strong className="text-amber-300 font-mono">{ai.processScore}/100</strong>
+                            </div>
+                          </div>
                         </div>
-                        <div className="bg-[#0b1122] border border-amber-500/30 rounded-xl p-3.5 space-y-1">
-                          <h4 className="font-bold text-amber-300 uppercase text-[11px]">AI Recommendation</h4>
-                          <p className="text-slate-200">{ai.recommendation}</p>
+
+                        {/* 6-Point Technical & Behavioral Synthesis */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div className="bg-[#0b1122] border border-emerald-500/30 rounded-xl p-3 space-y-1">
+                            <h4 className="font-bold text-emerald-300 uppercase text-[10px]">
+                              Biggest Technical Strength
+                            </h4>
+                            <p className="text-emerald-100 text-[11px]">✓ {ai.biggestTechStrength}</p>
+                          </div>
+                          <div className="bg-[#0b1122] border border-rose-500/30 rounded-xl p-3 space-y-1">
+                            <h4 className="font-bold text-rose-300 uppercase text-[10px]">
+                              Biggest Technical Weakness
+                            </h4>
+                            <p className="text-rose-100 text-[11px]">✗ {ai.biggestTechWeakness}</p>
+                          </div>
+                          <div className="bg-[#0b1122] border border-cyan-500/30 rounded-xl p-3 space-y-1">
+                            <h4 className="font-bold text-cyan-300 uppercase text-[10px]">
+                              Biggest Behavioral Strength
+                            </h4>
+                            <p className="text-cyan-100 text-[11px]">✓ {ai.biggestBehavStrength}</p>
+                          </div>
+                          <div className="bg-[#0b1122] border border-amber-500/30 rounded-xl p-3 space-y-1">
+                            <h4 className="font-bold text-amber-300 uppercase text-[10px]">
+                              Biggest Behavioral Weakness
+                            </h4>
+                            <p className="text-amber-100 text-[11px]">⚠️ {ai.biggestBehavWeakness}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#0b1122] border border-indigo-500/30 rounded-xl p-3 space-y-1">
+                          <h4 className="font-bold text-indigo-300 uppercase text-[10px]">Key Lesson Learned</h4>
+                          <p className="text-slate-200 text-[11px]">📌 {ai.keyLesson}</p>
+                        </div>
+
+                        <div className="bg-[#0b1122] border border-cyan-500/40 rounded-xl p-3 space-y-1">
+                          <h4 className="font-bold text-cyan-300 uppercase text-[10px]">
+                            One Actionable Improvement for the Next Trade
+                          </h4>
+                          <p className="text-white font-semibold text-[11px]">🎯 {ai.recommendation}</p>
                         </div>
                       </div>
                     )}
