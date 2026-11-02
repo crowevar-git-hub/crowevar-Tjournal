@@ -1,3 +1,4 @@
+import CertificateShowcase from './CertificateShowcase';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Layers, Wallet, TrendingUp, Award, Calculator, Briefcase,
@@ -4099,7 +4100,14 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
 export default function App() {
   return (
     <SafeErrorBoundary>
-      <JournalDashboard />
+      <div className="min-h-screen bg-[#060913] text-slate-100">
+        <div className="max-w-[1960px] mx-auto px-3 sm:px-5 pt-4 flex flex-col xl:flex-row items-start gap-5">
+          <CertificateShowcase />
+          <div className="flex-1 min-w-0 w-full">
+            <JournalDashboard />
+          </div>
+        </div>
+      </div>
     </SafeErrorBoundary>
   );
 }
