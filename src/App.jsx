@@ -1,4 +1,4 @@
-import SystemGuardian from './SystemGuardian';
+﻿import SystemGuardian from './SystemGuardian';
 import CertificateShowcase from './CertificateShowcase';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -690,7 +690,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
   const handleExportLedgerCSV = () => {
     const list = getExportTargetTrades();
     if (list.length === 0) {
-      showToast('⚠️ No trades in the current view to export.');
+      showToast('âš ï¸ No trades in the current view to export.');
       return;
     }
 
@@ -803,13 +803,13 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast(`📄 Exported ${list.length} trades (with notes & screenshot data) to CSV!`);
+    showToast(`ðŸ“„ Exported ${list.length} trades (with notes & screenshot data) to CSV!`);
   };
 
   const handleExportLedgerHTML = () => {
     const list = getExportTargetTrades();
     if (list.length === 0) {
-      showToast('⚠️ No trades in the current view to export.');
+      showToast('âš ï¸ No trades in the current view to export.');
       return;
     }
 
@@ -826,7 +826,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
     const grossProf = closed.reduce((s, t) => s + (Number(t.profit) || 0), 0);
     const grossLoss = closed.reduce((s, t) => s + (Number(t.loss) || 0), 0);
     const netPnl = grossProf - grossLoss;
-    const pf = grossLoss > 0 ? (grossProf / grossLoss).toFixed(2) : grossProf > 0 ? '∞' : '0.00';
+    const pf = grossLoss > 0 ? (grossProf / grossLoss).toFixed(2) : grossProf > 0 ? 'âˆž' : '0.00';
     const totalPhotos = list.reduce((s, t) => s + ((t.screenshots || []).length || 0), 0);
 
     const rowsHtml = list
@@ -845,10 +845,10 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
         const shots = Array.isArray(t.screenshots) ? t.screenshots : [];
         const statusBadge =
           t.status === 'W'
-            ? '<span class="badge won">✓ Won</span>'
+            ? '<span class="badge won">âœ“ Won</span>'
             : t.status === 'L'
-            ? '<span class="badge lost">✕ Lost</span>'
-            : '<span class="badge open">◉ Open</span>';
+            ? '<span class="badge lost">âœ• Lost</span>'
+            : '<span class="badge open">â—‰ Open</span>';
 
         const shotsHtml =
           shots.length > 0
@@ -881,7 +881,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               <span class="side ${t.side === 'Buy' ? 'buy' : 'sell'}">${escHtml(t.side)} (${escHtml(
           t.lots ?? 1
         )} Lot)</span>
-              <span class="stage-pill">${escHtml(t.stage)} • Acct #${escHtml(t.accountNumber)}</span>
+              <span class="stage-pill">${escHtml(t.stage)} â€¢ Acct #${escHtml(t.accountNumber)}</span>
             </div>
             <div class="trade-pnl">
               ${statusBadge}
@@ -963,10 +963,10 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
   <div class="container">
     <div class="top-header">
       <div class="brand">
-        <h1>TRADE<span>ATLAS</span> — CROWEVAR</h1>
+        <h1>TRADE<span>ATLAS</span> â€” CROWEVAR</h1>
         <p>Execution Journal &amp; Trade Ledger Complete Export (${escHtml(
           ledgerExportScope === 'ALL' ? 'All Stages & Accounts' : activeContext
-        )}) • Generated ${new Date().toLocaleString()}</p>
+        )}) â€¢ Generated ${new Date().toLocaleString()}</p>
       </div>
     </div>
     <div class="kpi-grid">
@@ -997,7 +997,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast(`🌐 Exported ${list.length} trades with embedded screenshots & notes to HTML!`);
+    showToast(`ðŸŒ Exported ${list.length} trades with embedded screenshots & notes to HTML!`);
   };
 
   // ============================================================================
@@ -1199,7 +1199,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
 
         setCloudStatus('Synced');
         setLastSyncedAt(new Date().toLocaleTimeString());
-        if (!silent) showToast('☁️ Synced latest trades, notes & screenshots from Cloud!');
+        if (!silent) showToast('â˜ï¸ Synced latest trades, notes & screenshots from Cloud!');
 
         // If local had newer trades/screenshots not yet in remote, push the merged state up
         if (mergedAll.length > remoteTrades.length && (!rbac || rbac.canWriteData)) {
@@ -1215,7 +1215,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
       console.error('Cloud pull error:', err);
       setCloudStatus('Error');
       setCloudInitialLoaded(true);
-      if (!silent) showToast(`⚠️ Cloud Pull Error: ${err.message}`);
+      if (!silent) showToast(`âš ï¸ Cloud Pull Error: ${err.message}`);
     }
   };
 
@@ -1314,11 +1314,11 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
 
       setCloudStatus('Synced');
       setLastSyncedAt(new Date().toLocaleTimeString());
-      if (!silent) showToast('☁️ All trades, notes & screenshots synced to Cloud!');
+      if (!silent) showToast('â˜ï¸ All trades, notes & screenshots synced to Cloud!');
     } catch (err) {
       console.error('Cloud push error:', err);
       setCloudStatus('Error');
-      if (!silent) showToast(`⚠️ Cloud Push Error: ${err.message}`);
+      if (!silent) showToast(`âš ï¸ Cloud Push Error: ${err.message}`);
     }
   };
 
@@ -1923,7 +1923,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     className="bg-transparent text-slate-100 font-mono font-bold focus:outline-none cursor-pointer pr-2 w-full max-w-[230px] sm:max-w-none truncate"
                   >
                     <option value="UNIFIED::ALL" className="bg-[#0d1326]">
-                      Unified View — All Accounts Combined
+                      Unified View â€” All Accounts Combined
                     </option>
                     {['Stage 1', 'Stage 2', 'Funded Account', 'Live Personal', 'Demo Account'].map((stg) => (
                       <optgroup
@@ -1939,7 +1939,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               value={`${stg}::${a}`}
                               className="bg-[#0d1326] text-slate-100"
                             >
-                              {a} — {stg} ({m.firm} • {m.size} • {m.platform})
+                              {a} â€” {stg} ({m.firm} â€¢ {m.size} â€¢ {m.platform})
                             </option>
                           );
                         })}
@@ -2130,7 +2130,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
             <div className={`text-2xl font-extrabold mt-2 mb-1 ${metrics.netPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {metrics.netPnl >= 0 ? `+$${metrics.netPnl.toFixed(2)}` : `-$${Math.abs(metrics.netPnl).toFixed(2)}`}
             </div>
-            <div className="text-xs text-slate-400">Gross W: +${metrics.grossProfit.toFixed(2)} • L: -${metrics.grossLoss.toFixed(2)}</div>
+            <div className="text-xs text-slate-400">Gross W: +${metrics.grossProfit.toFixed(2)} â€¢ L: -${metrics.grossLoss.toFixed(2)}</div>
           </div>
 
           <div className="bg-[#090d1a]/90 border border-slate-800/80 rounded-2xl p-5">
@@ -2144,13 +2144,13 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
           <div className="bg-[#090d1a]/90 border border-slate-800/80 rounded-2xl p-5">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">PROFIT FACTOR</span>
             <div className="text-2xl font-extrabold text-amber-400 mt-2 mb-1">{metrics.profitFactor.toFixed(2)}</div>
-            <div className="text-xs text-slate-400">Avg W: +${metrics.avgWin.toFixed(2)} • Avg L: -${metrics.avgLoss.toFixed(2)}</div>
+            <div className="text-xs text-slate-400">Avg W: +${metrics.avgWin.toFixed(2)} â€¢ Avg L: -${metrics.avgLoss.toFixed(2)}</div>
           </div>
 
           <div className="bg-[#090d1a]/90 border border-slate-800/80 rounded-2xl p-5">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">EXECUTIONS &amp; PLATFORM</span>
             <div className="text-2xl font-extrabold text-emerald-400 mt-2 mb-1">{metrics.totalClosed} Closed</div>
-            <div className="text-xs text-cyan-300 font-mono">{firm} • {activePlatform}</div>
+            <div className="text-xs text-cyan-300 font-mono">{firm} â€¢ {activePlatform}</div>
           </div>
         </section>
 
@@ -2181,7 +2181,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     ${maxUsed.toFixed(2)} Used
                   </div>
                   <div className="flex items-center justify-between text-xs text-slate-400 mb-2.5">
-                    <span>Cap: ${maxCap.toFixed(2)} • Breach: ${(accountSize - maxCap).toLocaleString()}</span>
+                    <span>Cap: ${maxCap.toFixed(2)} â€¢ Breach: ${(accountSize - maxCap).toLocaleString()}</span>
                     <span className="text-emerald-400 font-semibold">
                       ${maxRem.toFixed(2)} Remaining
                     </span>
@@ -2196,7 +2196,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     <div className="flex justify-between items-center text-[10px] text-slate-400">
                       <span>Drawdown Buffer</span>
                       <span className="font-mono font-semibold text-emerald-400">
-                        {maxPct.toFixed(1)}% Used • {maxSafePct.toFixed(1)}% Safe
+                        {maxPct.toFixed(1)}% Used â€¢ {maxSafePct.toFixed(1)}% Safe
                       </span>
                     </div>
                   </div>
@@ -2242,7 +2242,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-white">DAILY LOSS (5%)</span>
                     <span className={`text-[10px] font-bold ${dailyUsed >= dailyCap ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {dailyUsed >= dailyCap ? '✕ Breached' : '✓ Passing'}
+                      {dailyUsed >= dailyCap ? 'âœ• Breached' : 'âœ“ Passing'}
                     </span>
                   </div>
                   <div className={`text-xl font-extrabold mt-2 mb-1 ${dailyUsed > 0 ? 'text-rose-400' : 'text-white'}`}>
@@ -2264,7 +2264,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     <div className="flex justify-between items-center text-[10px] text-slate-400">
                       <span>Daily Risk Buffer</span>
                       <span className="font-mono font-semibold text-emerald-400">
-                        {dailyPct.toFixed(1)}% Used • {dailySafePct.toFixed(1)}% Safe
+                        {dailyPct.toFixed(1)}% Used â€¢ {dailySafePct.toFixed(1)}% Safe
                       </span>
                     </div>
                   </div>
@@ -2305,7 +2305,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               </div>
             </div>
             <div className="bg-[#090d1a]/90 border border-slate-800/80 rounded-2xl p-5">
-              <div className="flex justify-between"><span className="text-xs font-bold text-white">TRADING DAYS</span><span className="text-[10px] text-emerald-400 font-bold">{metrics.uniqueDays >= 2 ? '✓ Passed' : 'In Progress'}</span></div>
+              <div className="flex justify-between"><span className="text-xs font-bold text-white">TRADING DAYS</span><span className="text-[10px] text-emerald-400 font-bold">{metrics.uniqueDays >= 2 ? 'âœ“ Passed' : 'In Progress'}</span></div>
               <div className="text-xl font-extrabold text-emerald-400 mt-2 mb-1">{metrics.uniqueDays} Days</div>
               <div className="text-xs text-slate-400">Min 2 Days Required</div>
             </div>
@@ -2319,7 +2319,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400"><CalendarIcon className="w-5 h-5" /></div>
               <div>
                 <h2 className="text-base font-bold text-white">
-                  Performance &amp; Execution Analytics — Account #{activeAccountNumber}
+                  Performance &amp; Execution Analytics â€” Account #{activeAccountNumber}
                 </h2>
                 <p className="text-xs text-slate-400">Use Month/Year controls or click any Available Data Month pill below.</p>
               </div>
@@ -2355,7 +2355,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                 onClick={() => { setSelectedCalendarDay(null); setSelectedYearMonth((prev) => (prev === 'ALL' ? (availableMonthsInfo[availableMonthsInfo.length - 1]?.ym || '2026-10') : 'ALL')); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${selectedYearMonth === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-[#0d1326] text-slate-300 border-slate-700'}`}
               >
-                {selectedYearMonth === 'ALL' ? '✓ All Months Active' : 'View All Months'}
+                {selectedYearMonth === 'ALL' ? 'âœ“ All Months Active' : 'View All Months'}
               </button>
             </div>
 
@@ -2454,7 +2454,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-white">Execution Journal &amp; Trade Ledger ({filteredTrades.length} Trades)</h2>
-              <p className="text-xs text-slate-400">Click any row to review Pre/Post-Trade notes &amp; side-by-side screenshots, or click the Pencil icon (✏) to edit.</p>
+              <p className="text-xs text-slate-400">Click any row to review Pre/Post-Trade notes &amp; side-by-side screenshots, or click the Pencil icon (âœ) to edit.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input type="text" placeholder="Search symbol, ticket, notes..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-[#0d1326] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white" />
@@ -2532,7 +2532,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     : 'text-slate-400'
                 }`}
               >
-                📱 Cards ({filteredTrades.length})
+                ðŸ“± Cards ({filteredTrades.length})
               </button>
               <button
                 type="button"
@@ -2543,7 +2543,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     : 'text-slate-400'
                 }`}
               >
-                📋 Full Table
+                ðŸ“‹ Full Table
               </button>
             </div>
           </div>
@@ -2590,11 +2590,11 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                                   : 'bg-rose-950 text-rose-300 border border-rose-500/30'
                               }`}
                             >
-                              {t.side} • {t.lots ?? 1}L
+                              {t.side} â€¢ {t.lots ?? 1}L
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            {t.stage} • Acct #{t.accountNumber} • {t.execDate}
+                            {t.stage} â€¢ Acct #{t.accountNumber} â€¢ {t.execDate}
                           </div>
                         </div>
 
@@ -2623,7 +2623,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                                 : 'bg-cyan-500/20 text-cyan-300'
                             }`}
                           >
-                            {t.status === 'W' ? '✓ Won' : t.status === 'L' ? '✕ Lost' : '◉ Open'}
+                            {t.status === 'W' ? 'âœ“ Won' : t.status === 'L' ? 'âœ• Lost' : 'â—‰ Open'}
                           </span>
                         </div>
                       </div>
@@ -2652,7 +2652,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                           </span>
                           {shots.length > 0 && (
                             <span className="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
-                              📸 {shots.length} Photo{shots.length > 1 ? 's' : ''}
+                              ðŸ“¸ {shots.length} Photo{shots.length > 1 ? 's' : ''}
                             </span>
                           )}
                         </div>
@@ -2716,7 +2716,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                     <tr key={t.id} onClick={() => { setReviewTradeId(t.id); setReviewModalOpen(true); }} className="hover:bg-[#0e192d] transition cursor-pointer">
                       <td className="py-3.5 px-3">
                         <span className="font-bold text-indigo-300">{t.stage}</span>
-                        <div className="font-mono text-[10px] text-amber-300">Acct #{t.accountNumber} • #{t.ticketId}</div>
+                        <div className="font-mono text-[10px] text-amber-300">Acct #{t.accountNumber} â€¢ #{t.ticketId}</div>
                       </td>
                       <td className="py-3.5 px-3 font-mono text-[11px] text-slate-300">{t.execDate?.replace('T', ' ')}</td>
                       <td className="py-3.5 px-3">
@@ -2725,15 +2725,15 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                       </td>
                       <td className="py-3.5 px-3">
                             <span className={"px-2.5 py-1 rounded-full text-[11px] font-bold " + (t.status === "W" ? "bg-emerald-500/15 text-emerald-400" : t.status === "L" ? "bg-rose-500/15 text-rose-400" : "bg-cyan-500/15 text-cyan-400")}>
-                          {t.status === 'W' ? '✓ Won' : t.status === 'L' ? '✕ Lost' : '◉ Open'}
+                          {t.status === 'W' ? 'âœ“ Won' : t.status === 'L' ? 'âœ• Lost' : 'â—‰ Open'}
                         </span>
                       </td>
                       <td className={`py-3.5 px-3 font-bold ${t.status === 'O' ? 'text-cyan-400' : t.profit >= t.loss ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {t.status === 'O' ? 'Pending' : t.profit >= t.loss ? `+$${(t.profit - t.loss).toFixed(2)}` : `-$${Math.abs(t.profit - t.loss).toFixed(2)}`}
                       </td>
                       <td className="py-3.5 px-3 space-x-1">
-                        {entryShots.length > 0 && <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[10px] border border-cyan-500/30">📷 Entry ({entryShots.length})</span>}
-                        {resultShots.length > 0 && <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] border border-emerald-500/30">📊 Result ({resultShots.length})</span>}
+                        {entryShots.length > 0 && <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[10px] border border-cyan-500/30">ðŸ“· Entry ({entryShots.length})</span>}
+                        {resultShots.length > 0 && <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] border border-emerald-500/30">ðŸ“Š Result ({resultShots.length})</span>}
                         {entryShots.length === 0 && resultShots.length === 0 && <span className="text-slate-600 italic">None</span>}
                       </td>
                       <td className="py-3.5 px-3 max-w-xs space-y-1">
@@ -2768,8 +2768,8 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
           <div className="bg-[#090d1a] border border-cyan-500/60 rounded-3xl max-w-5xl w-full p-6 space-y-5 my-6 max-h-[92vh] overflow-y-auto text-xs">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-lg font-extrabold text-white">Trade Review — #{currentReviewTrade.ticketId} ({currentReviewTrade.symbol})</h3>
-                <p className="text-slate-400">Account #{currentReviewTrade.accountNumber} • {currentReviewTrade.stage}</p>
+                <h3 className="text-lg font-extrabold text-white">Trade Review â€” #{currentReviewTrade.ticketId} ({currentReviewTrade.symbol})</h3>
+                <p className="text-slate-400">Account #{currentReviewTrade.accountNumber} â€¢ {currentReviewTrade.stage}</p>
               </div>
               <button onClick={() => setReviewModalOpen(false)} className="p-2 rounded-xl bg-slate-800 text-slate-300"><X className="w-5 h-5" /></button>
             </div>
@@ -2781,11 +2781,11 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                 return (
                   <div key={typeKey} className="bg-[#0b1020] border border-slate-800 rounded-2xl p-4 space-y-2">
                     <span className={`font-bold ${typeKey === 'ENTRY' ? 'text-cyan-300' : 'text-emerald-300'}`}>
-                      {typeKey === 'ENTRY' ? '📈 Entry Screenshot (Setup)' : '📊 Result Screenshot (Outcome)'}
+                      {typeKey === 'ENTRY' ? 'ðŸ“ˆ Entry Screenshot (Setup)' : 'ðŸ“Š Result Screenshot (Outcome)'}
                     </span>
                     <div className="aspect-video bg-black/60 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center p-2">
                       {!latest ? (
-                        <span className="text-slate-500 italic">No {typeKey} screenshot attached — click Edit Trade below to upload</span>
+                        <span className="text-slate-500 italic">No {typeKey} screenshot attached â€” click Edit Trade below to upload</span>
                       ) : latest.url ? (
                         <img src={latest.url} alt={latest.filename} className="w-full h-full object-cover rounded-lg cursor-zoom-in" onClick={() => setLightboxImage(latest)} />
                       ) : (
@@ -2844,9 +2844,9 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               {/* 2. Status */}
               <div className="grid grid-cols-3 gap-2.5">
                 {[
-                  { k: 'W', l: '✓ Won (W)', c: 'border-emerald-500 bg-emerald-950/40 text-emerald-300' },
-                  { k: 'L', l: '✕ Lost (L)', c: 'border-rose-500 bg-rose-950/40 text-rose-300' },
-                  { k: 'O', l: '◉ Open / Active (O)', c: 'border-cyan-500 bg-cyan-950/40 text-cyan-300' }
+                  { k: 'W', l: 'âœ“ Won (W)', c: 'border-emerald-500 bg-emerald-950/40 text-emerald-300' },
+                  { k: 'L', l: 'âœ• Lost (L)', c: 'border-rose-500 bg-rose-950/40 text-rose-300' },
+                  { k: 'O', l: 'â—‰ Open / Active (O)', c: 'border-cyan-500 bg-cyan-950/40 text-cyan-300' }
                 ].map((st) => (
                   <button
                     key={st.k}
@@ -2970,7 +2970,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               <span
                                 key={hint}
                                 onClick={() => {
-                                  const prefix = preTechText ? `${preTechText}\n• ${hint}: ` : `• ${hint}: `;
+                                  const prefix = preTechText ? `${preTechText}\nâ€¢ ${hint}: ` : `â€¢ ${hint}: `;
                                   updatePreField({ technicalNotes: prefix });
                                 }}
                                 className="px-2 py-0.5 rounded bg-[#0b1326] hover:bg-cyan-950/60 border border-slate-800 hover:border-cyan-500/40 text-cyan-200 cursor-pointer transition"
@@ -2987,7 +2987,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                           value={preTechText}
                           onChange={(e) => updatePreField({ technicalNotes: e.target.value })}
                           placeholder={
-                            'Document WHY this trade has an edge:\n• Market structure, trend direction & HTF bias\n• Key S/R & liquidity sweep zones\n• Entry model, confluences & R:R assessment\n• Stop-loss logic, target logic & invalidation conditions...'
+                            'Document WHY this trade has an edge:\nâ€¢ Market structure, trend direction & HTF bias\nâ€¢ Key S/R & liquidity sweep zones\nâ€¢ Entry model, confluences & R:R assessment\nâ€¢ Stop-loss logic, target logic & invalidation conditions...'
                           }
                           className="w-full bg-[#050811] border border-cyan-500/35 focus:border-cyan-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
                         />
@@ -3085,7 +3085,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               }
                             >
                               <span>Following Plan?</span>
-                              <span>{followingPlan ? 'YES ✓' : 'NO ✕'}</span>
+                              <span>{followingPlan ? 'YES âœ“' : 'NO âœ•'}</span>
                             </button>
 
                             <button
@@ -3099,7 +3099,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               }
                             >
                               <span>FOMO Present?</span>
-                              <span>{fomoPresent ? 'YES ⚠️' : 'NO'}</span>
+                              <span>{fomoPresent ? 'YES âš ï¸' : 'NO'}</span>
                             </button>
 
                             <button
@@ -3113,7 +3113,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               }
                             >
                               <span>Revenge Trade?</span>
-                              <span>{revengePresent ? 'YES ⚠️' : 'NO'}</span>
+                              <span>{revengePresent ? 'YES âš ï¸' : 'NO'}</span>
                             </button>
 
                             <button
@@ -3127,7 +3127,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               }
                             >
                               <span>Forcing Trade?</span>
-                              <span>{urgeToForce ? 'YES ⚠️' : 'NO'}</span>
+                              <span>{urgeToForce ? 'YES âš ï¸' : 'NO'}</span>
                             </button>
                           </div>
                         </div>
@@ -3137,7 +3137,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                           value={preBehavText}
                           onChange={(e) => updatePreField({ behavioralNotes: e.target.value })}
                           placeholder={
-                            'Describe what you are thinking & feeling before entry:\n• Current emotional state, mental clarity & focus\n• Any urge to force a trade or external influences?'
+                            'Describe what you are thinking & feeling before entry:\nâ€¢ Current emotional state, mental clarity & focus\nâ€¢ Any urge to force a trade or external influences?'
                           }
                           className="w-full bg-[#050811] border border-amber-500/35 focus:border-amber-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
                         />
@@ -3342,7 +3342,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                                       : 'bg-rose-950/40 border-rose-500/50 text-rose-300')
                                   }
                                 >
-                                  {chk.val ? '☑ ' : '☐ '}
+                                  {chk.val ? 'â˜‘ ' : 'â˜ '}
                                   {chk.label}
                                 </button>
                               ))}
@@ -3354,7 +3354,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                             value={postTechText}
                             onChange={(e) => updatePostField({ technicalNotes: e.target.value })}
                             placeholder={
-                              'Technical execution & outcome review:\n• Market behavior vs. expected behavior\n• What worked well technically & what was missed?\n• Lessons learned & technical adjustments for future setups...'
+                              'Technical execution & outcome review:\nâ€¢ Market behavior vs. expected behavior\nâ€¢ What worked well technically & what was missed?\nâ€¢ Lessons learned & technical adjustments for future setups...'
                             }
                             className="w-full bg-[#050811] border border-indigo-500/35 focus:border-indigo-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
                           />
@@ -3453,7 +3453,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                                         : 'bg-[#0b1122] border-slate-800 text-slate-400 hover:text-white')
                                     }
                                   >
-                                    {active ? '⚠️ ' : '+ '}
+                                    {active ? 'âš ï¸ ' : '+ '}
                                     {bTag}
                                   </button>
                                 );
@@ -3466,7 +3466,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                             value={postBehavText}
                             onChange={(e) => updatePostField({ behavioralNotes: e.target.value })}
                             placeholder={
-                              'Review psychological performance during the trade:\n• Did emotions influence stop-loss, targets, early exit, or hesitation?\n• Cognitive biases, emotional triggers, or discipline observations...'
+                              'Review psychological performance during the trade:\nâ€¢ Did emotions influence stop-loss, targets, early exit, or hesitation?\nâ€¢ Cognitive biases, emotional triggers, or discipline observations...'
                             }
                             className="w-full bg-[#050811] border border-rose-500/35 focus:border-rose-400 rounded-xl p-3 text-white text-xs placeholder:text-slate-500 focus:outline-none leading-relaxed"
                           />
@@ -3482,12 +3482,12 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                             </span>
                             {isGoodProcessLoss && (
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[11px]">
-                                ✓ Successful Process Trade (Followed Plan Despite Loss)
+                                âœ“ Successful Process Trade (Followed Plan Despite Loss)
                               </span>
                             )}
                             {isRuleBrokenWin && (
                               <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-[11px]">
-                                ⚠️ Failed Process Trade (Profitable Outcome, Broken Process Rules)
+                                âš ï¸ Failed Process Trade (Profitable Outcome, Broken Process Rules)
                               </span>
                             )}
                           </div>
@@ -3934,7 +3934,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                               ? `+$${(Number(t.profit) - Number(t.loss)).toFixed(2)}`
                               : `-$${Math.abs(Number(t.profit) - Number(t.loss)).toFixed(2)}`}
                           </strong>{' '}
-                          • Deleted: {t.deletedDate || 'Recently'}
+                          â€¢ Deleted: {t.deletedDate || 'Recently'}
                         </div>
                       </div>
 
@@ -3992,7 +3992,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
           <div className="bg-[#090d1a] border border-cyan-500/50 rounded-3xl max-w-lg w-full p-6 space-y-4 text-xs shadow-[0_0_50px_rgba(6,182,212,0.25)]">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-white">☁️ Cloud Database Sync (Supabase)</h3>
+                <h3 className="text-base font-extrabold text-white">â˜ï¸ Cloud Database Sync (Supabase)</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   Sync all trades, Pre/Post-Trade notes, and screenshots across all your devices.
                 </p>
@@ -4006,7 +4006,7 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase">SYNC STATUS</span>
                 <strong className={cloudStatus === 'Synced' ? 'text-emerald-400 text-sm' : cloudStatus === 'Error' ? 'text-rose-400 text-sm' : 'text-amber-300 text-sm'}>
-                  {cloudStatus} {lastSyncedAt ? `• Last synced at ${lastSyncedAt}` : ''}
+                  {cloudStatus} {lastSyncedAt ? `â€¢ Last synced at ${lastSyncedAt}` : ''}
                 </strong>
               </div>
               <div className="flex gap-2">
@@ -4015,14 +4015,14 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
                   onClick={() => pullFromCloud(cloudUrl, cloudKey, false)}
                   className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold"
                 >
-                  ⬇ Pull from Cloud
+                  â¬‡ Pull from Cloud
                 </button>
                 <button
                   type="button"
                   onClick={() => pushToCloud(cloudUrl, cloudKey, trades, profiles, recycleBin, false)}
                   className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold"
                 >
-                  ⬆ Push to Cloud
+                  â¬† Push to Cloud
                 </button>
               </div>
             </div>
@@ -4098,6 +4098,93 @@ return () => window.removeEventListener('crowevar-rbac-change', handleRbacChange
   );
 }
 
+// === NON-DESTRUCTIVE FUNDED ACCOUNT #709019 DATE SYNC (OCT 30 & NOV 2026) ===
+function repairFunded709019TradeDates(tradesList) {
+  if (!Array.isArray(tradesList)) return tradesList;
+  const dateMapById = {
+    'TRD-883412': { date: '2026-11-12 23:20', year: 2026, month: 10, day: 12 },
+    'TRD-278821': { date: '2026-11-10 21:46', year: 2026, month: 10, day: 10 },
+    'TRD-514705': { date: '2026-11-10 18:27', year: 2026, month: 10, day: 10 },
+    'TRD-885648': { date: '2026-11-10 17:20', year: 2026, month: 10, day: 10 },
+    'TRD-379028': { date: '2026-11-09 10:17', year: 2026, month: 10, day: 9  },
+    'TRD-573238': { date: '2026-11-06 21:22', year: 2026, month: 10, day: 6  },
+    'TRD-640978': { date: '2026-11-06 07:19', year: 2026, month: 10, day: 6  },
+    'TRD-671660': { date: '2026-11-05 21:24', year: 2026, month: 10, day: 5  },
+    'TRD-747816': { date: '2026-11-03 21:18', year: 2026, month: 10, day: 3  },
+    'TRD-793981': { date: '2026-11-04 09:18', year: 2026, month: 10, day: 4  },
+    'TRD-687826': { date: '2026-11-04 08:36', year: 2026, month: 10, day: 4  }
+  };
+
+  return tradesList.map((t) => {
+    const isFunded709019 =
+      String(t.accountNumber || '').includes('709019') ||
+      t.stage === 'Funded Account';
+    if (!isFunded709019) return t;
+
+    const cleanTicket = String(t.ticketId || t.id || '').replace(/^#/, '');
+    const netVal = Number(
+      t.netPnl !== undefined
+        ? t.netPnl
+        : (Number(t.profit || 0) - Number(t.loss || 0))
+    );
+    const absCheck = (target) => Math.abs(netVal - target) < 0.65;
+    const sym = String(t.symbol || '').toUpperCase();
+
+    let target = dateMapById[cleanTicket] || null;
+
+    if (!target) {
+      if (sym === 'AUDUSD' && absCheck(21.00))        target = { date: '2026-11-12 23:20', year: 2026, month: 10, day: 12 };
+      else if (sym === 'USDCAD' && (absCheck(177.62) || absCheck(180.62))) target = { date: '2026-11-11 20:01', year: 2026, month: 10, day: 11 };
+      else if (sym === 'US100' && absCheck(-214.80))  target = { date: '2026-11-10 23:50', year: 2026, month: 10, day: 10 };
+      else if (sym === 'XAUUSD' && absCheck(5.90))    target = { date: '2026-11-10 21:46', year: 2026, month: 10, day: 10 };
+      else if (sym === 'GBPCAD' && (absCheck(9.29) || absCheck(9.61)))     target = { date: '2026-11-10 18:27', year: 2026, month: 10, day: 10 };
+      else if (sym === 'GBPJPY' && (absCheck(330.59) || absCheck(340.21))) target = { date: '2026-11-10 17:20', year: 2026, month: 10, day: 10 };
+      else if ((sym === 'NZDUSD' || sym === 'AUDCAD') && absCheck(-244.54)) target = { date: '2026-11-09 10:17', year: 2026, month: 10, day: 9 };
+      else if (sym === 'NZDUSD' && absCheck(-57.00))  target = { date: '2026-11-06 21:22', year: 2026, month: 10, day: 6 };
+      else if (sym === 'GBPAUD' && absCheck(297.19))  target = { date: '2026-11-06 07:19', year: 2026, month: 10, day: 6 };
+      else if (sym === 'GBPAUD' && absCheck(22.84))   target = { date: '2026-11-05 21:24', year: 2026, month: 10, day: 5 };
+      else if (sym === 'GBPAUD' && absCheck(164.53))  target = { date: '2026-11-04 09:18', year: 2026, month: 10, day: 4 };
+      else if (sym === 'AUDCAD' && absCheck(121.44))  target = { date: '2026-11-04 08:36', year: 2026, month: 10, day: 4 };
+      else if (sym === 'US100' && absCheck(-118.20))  target = { date: '2026-11-03 21:18', year: 2026, month: 10, day: 3 };
+      else if (sym === 'US100' && absCheck(12.40))    target = { date: '2026-11-03 20:22', year: 2026, month: 10, day: 3 };
+      else if (sym === 'US100' && absCheck(-94.30))   target = { date: '2026-11-03 23:00', year: 2026, month: 10, day: 3 };
+      else if (sym === 'US100' && absCheck(109.60))   target = { date: '2026-11-02 21:43', year: 2026, month: 10, day: 2 };
+      else if (sym === 'US100' && absCheck(-97.20))   target = { date: '2026-11-02 20:23', year: 2026, month: 10, day: 2 };
+      else if (sym === 'US100' && absCheck(-55.90))   target = { date: '2026-11-02 23:14', year: 2026, month: 10, day: 2 };
+      else if (sym === 'XAUUSD' && (absCheck(217.45) || absCheck(216.95))) target = { date: '2026-11-02 07:05', year: 2026, month: 10, day: 2 };
+      else if (sym === 'USDCAD' && (absCheck(-84.61) || absCheck(-81.61))) target = { date: '2026-10-30 21:46', year: 2026, month: 9,  day: 30 };
+    }
+
+    if (!target) return t;
+
+    return {
+      ...t,
+      execDate: target.date,
+      closeDate: target.date,
+      execYear: target.year,
+      closeYear: target.year,
+      execMonth: target.month,
+      closeMonth: target.month,
+      execDay: target.day,
+      closeDay: target.day
+    };
+  });
+}
+
+try {
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('crowevar_trades')) {
+      const parsed = JSON.parse(localStorage.getItem(k));
+      if (Array.isArray(parsed)) {
+        localStorage.setItem(k, JSON.stringify(repairFunded709019TradeDates(parsed)));
+      }
+    }
+  }
+} catch (err) {
+  console.error('Date repair warning:', err);
+}
+
 export default function App() {
   return (
     <SafeErrorBoundary>
@@ -4107,3 +4194,4 @@ export default function App() {
     </SafeErrorBoundary>
   );
 }
+
